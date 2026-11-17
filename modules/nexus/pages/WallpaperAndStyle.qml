@@ -243,8 +243,16 @@ PageBase {
                 text: Tr.tr("Windows")
             }
 
-            StepperRow {
+            ToggleRow {
                 first: true
+                // SEARCH: floating tiling window mode layout workspace
+                text: Tr.tr("Floating window mode")
+                subtext: Tr.tr("Float all open and newly launched windows instead of tiling them")
+                checked: GlobalConfig.general.floatingWindowMode
+                onToggled: GlobalConfig.general.floatingWindowMode = checked
+            }
+
+            StepperRow {
                 // SEARCH: corner radius rounded corners window rounding
                 label: Tr.tr("Window corner radius")
                 subtext: Tr.tr("Radius of every window's corners, in pixels; the border around the desktop follows it")

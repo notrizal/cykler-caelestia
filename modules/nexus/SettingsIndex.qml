@@ -84,6 +84,15 @@ QtObject {
             path: [],
             title: Tr.tr("Wallpaper & style"),
             section: Tr.tr("Windows"),
+            label: Tr.tr("Floating window mode"),
+            subtext: Tr.tr("Float all open and newly launched windows instead of tiling them"),
+            keywords: "floating tiling window mode layout workspace"
+        },
+        {
+            page: "wallpaper",
+            path: [],
+            title: Tr.tr("Wallpaper & style"),
+            section: Tr.tr("Windows"),
             label: Tr.tr("Window corner radius"),
             subtext: Tr.tr("Radius of every window's corners, in pixels; the border around the desktop follows it"),
             keywords: "corner radius rounded corners window rounding"

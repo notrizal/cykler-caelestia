@@ -12,6 +12,7 @@ Scope {
         GameMode;
         InputSettings;
         WindowSettings;
+        WindowMode;
         Notifs;
         Players;
         Brightness;
