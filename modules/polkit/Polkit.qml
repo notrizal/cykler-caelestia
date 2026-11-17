@@ -22,7 +22,7 @@ Scope {
     // screen if focus moves while it is up
     property ShellScreen promptScreen
 
-    readonly property ShellScreen focusedScreen: Screens.screens.find(s => Hypr.monitorFor(s) === Hypr.focusedMonitor) ?? Screens.screens[0]
+    readonly property ShellScreen focusedScreen: Screens.screens.find(s => Hypr.monitorFor(s) === Hypr.focusedMonitor) ?? Screens.screens[0] ?? null
 
     // Built through a loader so the retry below can throw away the refused one and ask again
     readonly property var agent: agentLoader.item

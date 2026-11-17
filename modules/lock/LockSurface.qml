@@ -38,8 +38,8 @@ WlSessionLockSurface {
             idleTimer.stop();
     }
 
-    contentItem.Config.screen: screen.name
-    contentItem.Tokens.screen: screen.name
+    contentItem.Config.screen: screen?.name ?? ""
+    contentItem.Tokens.screen: screen?.name ?? ""
 
     color: "transparent"
 
@@ -265,6 +265,7 @@ WlSessionLockSurface {
 
         Loader {
             anchors.fill: parent
+            active: (root.screen?.name ?? "") !== ""
             sourceComponent: Config.lock.useWallpaper ? wallpaperBackground : screencopyBackground
         }
     }

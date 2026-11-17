@@ -39,7 +39,7 @@ Scope {
 
     Loader {
         asynchronous: true
-        active: true
+        active: Quickshell.screens.some(s => s && s.name !== "")
         onLoaded: active = false
 
         // Force a load of a screencopy so the one in the lock works
@@ -47,7 +47,7 @@ Scope {
         // the first request it fails to capture (because it's async and the compositor
         // refuses capture when locked)
         sourceComponent: ScreencopyView {
-            captureSource: Quickshell.screens[0]
+            captureSource: Quickshell.screens.find(s => s && s.name !== "") ?? null
         }
     }
 

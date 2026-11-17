@@ -293,7 +293,7 @@ Item {
         interval: 500
         repeat: true
         triggeredOnStart: true
-        running: root.screenState.overview
+        running: root.screenState?.overview ?? false
         onTriggered: {
             Hyprland.refreshToplevels();
             Hyprland.refreshWorkspaces();
@@ -327,7 +327,7 @@ Item {
     // The tiles swap at once, so the new page slides in over the old one's place. Only while
     // the overview is up: it snaps to the focused workspace's page as it opens.
     onPageChanged: {
-        if (root.screenState.overview && root.reveal > 0.5 && root.page !== root.shownPage) {
+        if ((root.screenState?.overview ?? false) && root.reveal > 0.5 && root.page !== root.shownPage) {
             root.slide = root.page > root.shownPage ? 1 : -1;
             slideAnim.restart();
         }
@@ -356,7 +356,7 @@ Item {
             root.dropTile = null;
             root.swapClient = null;
             root.pending = null;
-            if (root.screenState.overview) {
+            if (root.screenState?.overview) {
                 root.resetSelection();
                 root.forceActiveFocus();
             }

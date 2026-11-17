@@ -201,7 +201,8 @@ ClippingRectangle {
         onPressed: e => root.tileGrabbed(e.x, e.y)
         onClicked: {
             Hypr.focusWorkspace(root.wsId);
-            root.screenState.overview = false;
+            if (root.screenState)
+                root.screenState.overview = false;
         }
     }
 

@@ -314,17 +314,25 @@ CustomMouseArea {
             root.armedAction = HotCornerAction.None;
             hotCornerTimer.stop();
 
-            // Only hide if not activated by shortcut
-            if (!osdShortcutActive) {
-                screenState.osd = false;
-                root.panels.osd.hovered = false;
+            if (screenState) {
+                // Only hide if not activated by shortcut
+                if (!osdShortcutActive) {
+                    screenState.osd = false;
+                    root.panels.osd.hovered = false;
+                }
+
+                if (!dashboardShortcutActive)
+                    screenState.dashboard = false;
+
+                if (!utilitiesShortcutActive)
+                    screenState.utilities = false;
+
+                // A corner or hover trigger that pulled the sidebar out lets it go again the same way,
+                // as once the pointer is off the drawer window no further movement reaches this area.
+                // One opened some other way (a keybind) stays open regardless of where the pointer is.
+                if (root.sidebarHoverActive || root.sidebarCornerActive)
+                    screenState.sidebar = false;
             }
-
-            if (!dashboardShortcutActive)
-                screenState.dashboard = false;
-
-            if (!utilitiesShortcutActive)
-                screenState.utilities = false;
 
             panels.dock.edgeHovered = false;
 
@@ -335,16 +343,13 @@ CustomMouseArea {
 
             if (Config.bar.showOnHover)
                 bar.isHovered = false;
-
-            // A corner or hover trigger that pulled the sidebar out lets it go again the same way,
-            // as once the pointer is off the drawer window no further movement reaches this area.
-            // One opened some other way (a keybind) stays open regardless of where the pointer is.
-            if (root.sidebarHoverActive || root.sidebarCornerActive)
-                screenState.sidebar = false;
         }
     }
 
     onPositionChanged: event => {
+        if (!screenState)
+            return;
+
         root.updateHotCorner(event.x, event.y);
 
         if (popouts.isDetached)
@@ -557,6 +562,9 @@ CustomMouseArea {
         property point lastPosition
 
         function updateUtilities(x: real, y: real): void {
+            if (!root.screenState)
+                return;
+
             const showUtilities = root.inBottomPanel(root.panels.utilities, x, y, true) && !(Config.sidebar.fullHeight && root.screenState.sidebar);
 
             if (!root.utilitiesShortcutActive)

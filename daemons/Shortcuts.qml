@@ -38,6 +38,8 @@ Scope {
             if (root.hasFullscreen)
                 return;
             const v = ShellState.forActive();
+            if (!v)
+                return;
             v.launcher = v.dashboard = v.osd = v.utilities = !(v.launcher || v.dashboard || v.osd || v.utilities);
         }
     }
@@ -51,7 +53,8 @@ Scope {
             if (root.hasFullscreen)
                 return;
             const screenState = ShellState.forActive();
-            screenState.dashboard = !screenState.dashboard;
+            if (screenState)
+                screenState.dashboard = !screenState.dashboard;
         }
     }
 
@@ -64,7 +67,8 @@ Scope {
             if (root.hasFullscreen)
                 return;
             const screenState = ShellState.forActive();
-            screenState.session = !screenState.session;
+            if (screenState)
+                screenState.session = !screenState.session;
         }
     }
 
@@ -77,7 +81,8 @@ Scope {
         onReleased: {
             if (!root.launcherInterrupted && !root.hasFullscreen) {
                 const screenState = ShellState.forActive();
-                screenState.launcher = !screenState.launcher;
+                if (screenState)
+                    screenState.launcher = !screenState.launcher;
             }
             root.launcherInterrupted = false;
         }
@@ -99,8 +104,11 @@ Scope {
         name: "notifPopoutOpen"
         description: "Open the sidebar"
         onPressed: {
-            if (!root.hasFullscreen)
-                ShellState.forActive().sidebar = true;
+            if (root.hasFullscreen)
+                return;
+            const screenState = ShellState.forActive();
+            if (screenState)
+                screenState.sidebar = true;
         }
     }
 
@@ -111,6 +119,8 @@ Scope {
         description: "Close the sidebar"
         onPressed: {
             const screenState = ShellState.forActive();
+            if (!screenState)
+                return;
             // With the overview up the same swipe turns its page instead
             if (screenState.overview)
                 screenState.overviewPageRequested(-1);
@@ -128,6 +138,8 @@ Scope {
         description: "Open the sidebar, or switch its tab"
         onPressed: {
             const screenState = ShellState.forActive();
+            if (!screenState)
+                return;
             if (screenState.overview) {
                 screenState.overviewPageRequested(1);
                 return;
@@ -151,8 +163,11 @@ Scope {
         name: "overviewOpen"
         description: "Open the overview"
         onPressed: {
-            if (!root.hasFullscreen)
-                ShellState.forActive().overview = true;
+            if (root.hasFullscreen)
+                return;
+            const screenState = ShellState.forActive();
+            if (screenState)
+                screenState.overview = true;
         }
     }
 
@@ -161,7 +176,11 @@ Scope {
         // qmllint enable unresolved-type
         name: "overviewClose"
         description: "Close the overview"
-        onPressed: ShellState.forActive().overview = false
+        onPressed: {
+            const screenState = ShellState.forActive();
+            if (screenState)
+                screenState.overview = false;
+        }
     }
 
     // qmllint disable unresolved-type
@@ -171,7 +190,7 @@ Scope {
         description: "Toggle the overview"
         onPressed: {
             const screenState = ShellState.forActive();
-            if (!screenState.overview && root.hasFullscreen)
+            if (!screenState || (!screenState.overview && root.hasFullscreen))
                 return;
             screenState.overview = !screenState.overview;
         }
@@ -185,6 +204,8 @@ Scope {
         description: "Toggle the to-do list"
         onPressed: {
             const screenState = ShellState.forActive();
+            if (!screenState)
+                return;
             const isTodoOpen = screenState.sidebar && screenState.notifPopoutTabKey === "todo";
             if (isTodoOpen) {
                 screenState.sidebar = false;
@@ -205,6 +226,8 @@ Scope {
         description: "Toggle the notepad"
         onPressed: {
             const screenState = ShellState.forActive();
+            if (!screenState)
+                return;
             const isNotepadOpen = screenState.sidebar && screenState.notifPopoutTabKey === "notes";
             if (isNotepadOpen) {
                 screenState.sidebar = false;
@@ -226,7 +249,8 @@ Scope {
             if (root.hasFullscreen || !Config.sidebar.enabled)
                 return;
             const screenState = ShellState.forActive();
-            screenState.sidebar = !screenState.sidebar;
+            if (screenState)
+                screenState.sidebar = !screenState.sidebar;
         }
     }
 
@@ -239,7 +263,8 @@ Scope {
             if (root.hasFullscreen)
                 return;
             const screenState = ShellState.forActive();
-            screenState.utilities = !screenState.utilities;
+            if (screenState)
+                screenState.utilities = !screenState.utilities;
         }
     }
 
@@ -259,7 +284,8 @@ Scope {
                 if (root.hasFullscreen && ["launcher", "session", "dashboard"].includes(drawer))
                     return;
                 const screenState = ShellState.forActive();
-                screenState[drawer] = !screenState[drawer];
+                if (screenState)
+                    screenState[drawer] = !screenState[drawer];
             } else {
                 console.warn(lc, `Drawer "${drawer}" does not exist`);
             }
@@ -267,12 +293,14 @@ Scope {
 
         function list(): string {
             const screenState = ShellState.forActive();
+            if (!screenState)
+                return "";
             return Object.keys(screenState).filter(k => typeof screenState[k] === "boolean").join("\n");
         }
 
         function isOpen(drawer: string): string {
             const screenState = ShellState.forActive();
-            if (typeof screenState[drawer] !== "boolean")
+            if (!screenState || typeof screenState[drawer] !== "boolean")
                 return "unknown";
             return screenState[drawer] ? "1" : "0";
         }

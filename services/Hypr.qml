@@ -174,7 +174,7 @@ Singleton {
 
     function reloadDynamicConfs(): void {
         if (usingLua) {
-            const confs = ['eval hl.bind("Caps_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, ignore_mods = true, release = true })', 'eval hl.bind("Num_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, ignore_mods = true, release = true })', 'eval hl.bind("code:66", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, ignore_mods = true, release = true })'];
+            const confs = ['eval hl.bind("Caps_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, ignore_mods = true, release = true })', 'eval hl.bind("Num_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, ignore_mods = true, release = true })', 'eval hl.bind("code:66", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, ignore_mods = true, release = true })', 'eval hl.unbind("SUPER + P")', 'eval hl.bind("SUPER + P", hl.dsp.global("caelestia:displayProject"), { description = "Project display" })'];
             if (!gesturesRegistered) {
                 gesturesRegistered = true;
 
@@ -192,7 +192,7 @@ Singleton {
             }
             extras.batchMessage(confs);
         } else {
-            extras.batchMessage(["keyword bindlni ,Caps_Lock,global,caelestia:refreshDevices", "keyword bindlni ,Num_Lock,global,caelestia:refreshDevices", "keyword bindlni ,code:66,global,caelestia:refreshDevices"]);
+            extras.batchMessage(["keyword bindlni ,Caps_Lock,global,caelestia:refreshDevices", "keyword bindlni ,Num_Lock,global,caelestia:refreshDevices", "keyword bindlni ,code:66,global,caelestia:refreshDevices", "keyword unbind SUPER, P", "keyword bind SUPER, P, global, caelestia:displayProject"]);
         }
     }
 
@@ -229,7 +229,7 @@ Singleton {
 
     Connections {
         function onLastIpcObjectChanged(): void {
-            const specialName = root.focusedMonitor.lastIpcObject.specialWorkspace.name;
+            const specialName = root.focusedMonitor?.lastIpcObject?.specialWorkspace?.name;
 
             if (specialName && specialName.startsWith("special:")) {
                 root.lastSpecialWorkspace = specialName;

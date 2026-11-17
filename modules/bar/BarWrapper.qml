@@ -29,15 +29,15 @@ Item {
     readonly property bool onBottom: position === BarPosition.Bottom
     readonly property bool vertical: onLeft || onRight
 
-    readonly property bool disabled: Strings.testRegexList(Config.bar.excludedScreens, screen.name)
+    readonly property bool disabled: !screen || Strings.testRegexList(Config.bar.excludedScreens, screen.name)
 
     // How far the bar reaches in from its screen edge; animates between the border thickness and the full bar
     property real thickness: fullscreen ? 0 : Config.border.thickness
     readonly property real clampedThickness: Math.max(Config.border.minThickness, thickness)
     readonly property int padding: Math.max(Tokens.padding.small, Config.border.thickness)
     readonly property int contentThickness: Tokens.sizes.bar.innerWidth + padding * 2
-    readonly property int exclusiveZone: !disabled && (Config.bar.persistent || screenState.bar) ? contentThickness : Config.border.thickness
-    readonly property bool shouldBeVisible: !fullscreen && !disabled && (Config.bar.persistent || screenState.bar || isHovered)
+    readonly property int exclusiveZone: !disabled && (Config.bar.persistent || (screenState?.bar ?? false)) ? contentThickness : Config.border.thickness
+    readonly property bool shouldBeVisible: !fullscreen && !disabled && (Config.bar.persistent || (screenState?.bar ?? false) || isHovered)
     property bool isHovered
 
     // Space taken from each screen edge, used to position everything that lives inside the frame

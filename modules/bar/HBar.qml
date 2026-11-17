@@ -217,7 +217,7 @@ RowLayout {
                     HActiveWindow {
                         objectName: "taskbarActiveWindow"
                         bar: root
-                        monitor: Brightness.getMonitorForScreen(root.screen)
+                        monitor: Brightness.getMonitorForScreen(root.screen) ?? null
                     }
                 }
             }

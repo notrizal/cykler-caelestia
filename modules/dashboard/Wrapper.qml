@@ -29,7 +29,7 @@ Item {
     }
 
     readonly property real nonAnimHeight: (content.item as Content)?.nonAnimHeight ?? 0
-    readonly property bool shouldBeActive: screenState.dashboard && Config.dashboard.enabled
+    readonly property bool shouldBeActive: (screenState?.dashboard ?? false) && Config.dashboard.enabled
     property real offsetScale: shouldBeActive ? 0 : 1
 
     // Which edge the dashboard hangs from and where along it (config dashboard.edge / dashboard.align)

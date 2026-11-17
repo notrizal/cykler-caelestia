@@ -18,7 +18,10 @@ Item {
         implicitWidth: implicitHeight
         implicitHeight: icon.implicitHeight + Tokens.padding.small
         radius: Tokens.rounding.full
-        onClicked: root.screenState.session = !root.screenState.session
+        onClicked: {
+            if (root.screenState)
+                root.screenState.session = !root.screenState.session;
+        }
     }
 
     MaterialIcon {

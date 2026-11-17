@@ -21,7 +21,7 @@ ClipRect {
     // strip, no dimming, no toggle on click - so the setting is honoured in one place
     readonly property bool specialEnabled: Config.bar.workspaces.specialWorkspaces
     readonly property bool onSpecial: root.specialEnabled && monitor?.lastIpcObject.specialWorkspace?.name !== ""
-    readonly property int activeWsId: monitor.activeWorkspace?.id ?? 1
+    readonly property int activeWsId: monitor?.activeWorkspace?.id ?? 1
     readonly property int activeWsIdx: workspaceIndex(activeWsId)
     readonly property int shown: Math.max(1, Config.bar.workspaces.shown)
     // NOTE(fork): the pointer over the strip trades the marks for the workspace numbers, and the

@@ -59,7 +59,7 @@ ClippingRectangle {
     readonly property real edgeBottom: Math.min(root.tileHeight, Math.round(root.offsetY + ((root.ipc?.at?.[1] ?? 0) + (root.ipc?.size?.[1] ?? 0) - root.originY) * root.fit))
     // Only capture while the overview is up, so nothing is recorded otherwise
 
-    readonly property var captureSource: root.screenState.overview ? root.client?.wayland ?? null : null
+    readonly property var captureSource: (root.screenState?.overview ?? false) ? root.client?.wayland ?? null : null
     // Kept in proportion to the window it sits on, so it does not swamp a small one
 
     readonly property real iconSize: Math.round(Math.min(44, Math.min(root.width, root.height) * 0.22))
@@ -220,7 +220,8 @@ ClippingRectangle {
         onPressed: e => root.grabbed(e.x, e.y)
         onClicked: {
             Hypr.focusWindow(root.client?.address ?? "");
-            root.screenState.overview = false;
+            if (root.screenState)
+                root.screenState.overview = false;
         }
     }
 }

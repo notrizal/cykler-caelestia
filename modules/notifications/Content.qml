@@ -41,20 +41,20 @@ Item {
         for (let i = 0; i < count; i++)
             height += (list.itemAtIndex(i) as NotifWrapper)?.nonAnimHeight ?? 0;
 
-        if (screenState.osd && osdSame && !atBottom) {
+        if (screenState?.osd && osdSame && !atBottom) {
             const h = osdPanel.y - clampedPadding;
             if (height > h)
                 height = h;
         }
 
-        if (screenState.session && sessionSame && !atBottom) {
+        if (screenState?.session && sessionSame && !atBottom) {
             const h = sessionPanel.y - clampedPadding;
             if (height > h)
                 height = h;
         }
 
-        if (screenState.utilities && utilitiesSame && !atBottom) {
-            const h = ((QsWindow.window as QsWindow)?.screen.height ?? 0) - (utilitiesPanel as Utilities.Wrapper).nonAnimHeight - Config.border.thickness * 2 - padding * 2 - Tokens.spacing.extraLarge;
+        if (screenState?.utilities && utilitiesSame && !atBottom) {
+            const h = ((QsWindow.window as QsWindow)?.screen?.height ?? 0) - (utilitiesPanel as Utilities.Wrapper).nonAnimHeight - Config.border.thickness * 2 - padding * 2 - Tokens.spacing.extraLarge;
             if (height > h)
                 height = h;
         }

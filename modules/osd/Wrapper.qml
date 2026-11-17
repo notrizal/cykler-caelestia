@@ -14,8 +14,8 @@ Item {
     required property bool sidebarOrSessionVisible
 
     property bool hovered
-    readonly property Brightness.Monitor monitor: Brightness.getMonitorForScreen(root.screen)
-    readonly property bool shouldBeActive: screenState.osd && Config.osd.enabled && !(screenState.utilities && Config.utilities.enabled)
+    readonly property Brightness.Monitor monitor: Brightness.getMonitorForScreen(root.screen) ?? null
+    readonly property bool shouldBeActive: (screenState?.osd ?? false) && Config.osd.enabled && !((screenState?.utilities ?? false) && Config.utilities.enabled)
     property real offsetScale: shouldBeActive ? 0 : 1
     property real sidebarOffset: sidebarOrSessionVisible ? 12 : 0
 
@@ -26,7 +26,8 @@ Item {
     property real brightness
 
     function show(): void {
-        screenState.osd = true;
+        if (screenState)
+            screenState.osd = true;
         timer.restart();
     }
 
@@ -90,7 +91,7 @@ Item {
 
         interval: root.Config.osd.hideDelay
         onTriggered: {
-            if (!root.hovered)
+            if (!root.hovered && root.screenState)
                 root.screenState.osd = false;
         }
     }

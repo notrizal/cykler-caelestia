@@ -93,10 +93,12 @@ StyledWindow {
     }
 
     onHasFullscreenChanged: {
-        screenState.launcher = false;
-        screenState.session = false;
-        screenState.dashboard = false;
-        screenState.displayProject = false;
+        if (screenState) {
+            screenState.launcher = false;
+            screenState.session = false;
+            screenState.dashboard = false;
+            screenState.displayProject = false;
+        }
         panels.popouts.close();
         panels.dock.closeAllPopups();
     }
@@ -109,7 +111,7 @@ StyledWindow {
     // the keyboard while any is up. So
     // does the timer panel, which has a field whether or not a tab is up behind it, and an empty
     // notification dock, where space starts the dino game
-    WlrLayershell.keyboardFocus: screenState.launcher || screenState.session || screenState.displayProject || (screenState.sidebar && (screenState.notifPopoutTabKey !== "notifications" || screenState.timerPane || screenState.dinoGame || Notifs.list.every(n => n.closed))) ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: (screenState?.launcher ?? false) || (screenState?.session ?? false) || (screenState?.displayProject ?? false) || ((screenState?.sidebar ?? false) && (screenState?.notifPopoutTabKey !== "notifications" || (screenState?.timerPane ?? false) || (screenState?.dinoGame ?? false) || Notifs.list.every(n => n.closed))) ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
     mask: hasFullscreen ? emptyRegion : regions
 
@@ -174,6 +176,8 @@ StyledWindow {
         active: {
             const s = root.screenState;
             const conf = root.contentItem.Config;
+            if (!s || !conf)
+                return false;
             if ((s.launcher && conf.launcher.enabled) || (s.session && conf.session.enabled) || (s.sidebar && conf.sidebar.enabled) || s.displayProject)
                 return true;
             if (!conf.dashboard.showOnHover && s.dashboard && conf.dashboard.enabled)
@@ -186,11 +190,13 @@ StyledWindow {
         }
         windows: [root]
         onCleared: {
-            root.screenState.launcher = false;
-            root.screenState.session = false;
-            root.screenState.sidebar = false;
-            root.screenState.dashboard = false;
-            root.screenState.displayProject = false;
+            if (root.screenState) {
+                root.screenState.launcher = false;
+                root.screenState.session = false;
+                root.screenState.sidebar = false;
+                root.screenState.dashboard = false;
+                root.screenState.displayProject = false;
+            }
             panels.popouts.hasCurrent = false;
             panels.dock.closeAllPopups();
             bar.closeTray();
@@ -199,7 +205,7 @@ StyledWindow {
 
     StyledRect {
         anchors.fill: parent
-        opacity: (root.screenState.session && Config.session.enabled) || panels.popouts.detachedMode !== "" ? 0.5 : 0
+        opacity: ((root.screenState?.session ?? false) && Config.session.enabled) || panels.popouts.detachedMode !== "" ? 0.5 : 0
         color: Colours.palette.m3scrim
 
         Behavior on opacity {

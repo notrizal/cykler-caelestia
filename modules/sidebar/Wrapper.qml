@@ -11,7 +11,7 @@ Item {
     required property ScreenState screenState
     readonly property Props props: Props {}
 
-    readonly property bool shouldBeActive: screenState.sidebar && Config.sidebar.enabled
+    readonly property bool shouldBeActive: (screenState?.sidebar ?? false) && Config.sidebar.enabled
     property real offsetScale: shouldBeActive ? 0 : 1
 
     visible: offsetScale < 1
@@ -20,7 +20,7 @@ Item {
     opacity: 1 - offsetScale
 
     Component.onCompleted: {
-        if (!root.screenState.sidebar)
+        if (root.screenState && !root.screenState.sidebar)
             root.screenState.phoneBrowseDevice = "";
     }
 
@@ -32,7 +32,7 @@ Item {
     // tabs back for next time. Also drops a device left over from before a reload
     Connections {
         function onSidebarChanged(): void {
-            if (!root.screenState.sidebar)
+            if (root.screenState && !root.screenState.sidebar)
                 root.screenState.phoneBrowseDevice = "";
         }
 

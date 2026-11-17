@@ -32,12 +32,26 @@ Singleton {
         return null;
     }
 
-    function forActive(): ScreenState {
+    function _activeInstance(instances: var): var {
+        if (!instances || instances.length === 0)
+            return null;
         const mon = Hypr.focusedMonitor;
-        for (const s of states.instances)
-            if (Hypr.monitorFor(s.modelData) === mon)
-                return s;
-        return null;
+        if (mon) {
+            for (const item of instances)
+                if (Hypr.monitorFor(item.modelData) === mon)
+                    return item;
+            for (const item of instances)
+                if (item.modelData?.name === mon.name)
+                    return item;
+        }
+        for (const item of instances)
+            if (Hypr.monitorFor(item.modelData)?.focused)
+                return item;
+        return instances[0];
+    }
+
+    function forActive(): ScreenState {
+        return _activeInstance(states.instances);
     }
 
     function componentsFor(screen: ShellScreen): Components {
@@ -48,11 +62,7 @@ Singleton {
     }
 
     function componentsForActive(): Components {
-        const mon = Hypr.focusedMonitor;
-        for (const c of components.instances)
-            if (Hypr.monitorFor(c.modelData) === mon)
-                return c;
-        return null;
+        return _activeInstance(components.instances);
     }
 
     Variants {
