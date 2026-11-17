@@ -13,6 +13,7 @@ Scope {
         InputSettings;
         WindowSettings;
         WindowMode;
+        Monitors;
         Notifs;
         Players;
         Brightness;

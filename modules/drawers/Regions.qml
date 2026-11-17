@@ -94,6 +94,12 @@ Region {
         height: panel.height * (1 - root.panels.utilities.offsetScale) + root.bar.insetBottom
     }
 
+    R {
+        panel: root.panels.displayProject
+        y: root.win.height - height
+        height: panel.height * (1 - root.panels.displayProject.offsetScale) + root.bar.insetBottom
+    }
+
     // While a popout is open its input area is its final one, not the one it is animating through, so the pointer
     // can move onto it as soon as it starts to appear
     Region {

@@ -4,6 +4,7 @@ import Caelestia.Config
 import qs.components
 import qs.modules.bar as Bar
 import qs.modules.dashboard as Dashboard
+import qs.modules.displayproject as DisplayProject
 import qs.modules.dock as Dock
 import qs.modules.launcher as Launcher
 import qs.modules.notch as Notch
@@ -31,6 +32,7 @@ Item {
     readonly property alias sessionWrapper: sessionWrapper
     readonly property alias launcher: launcher
     readonly property alias dashboard: dashboard
+    readonly property alias displayProject: displayProject
     readonly property alias dock: dock
     readonly property alias notch: notch
     readonly property alias popouts: popoutsWrapper.content
@@ -193,6 +195,15 @@ Item {
         screenState: root.screenState
         sidebar: sidebar
         popouts: popoutsWrapper.content
+
+        anchors.bottom: parent.bottom
+        anchors.right: parent.right
+    }
+
+    DisplayProject.Wrapper {
+        id: displayProject
+
+        screenState: root.screenState
 
         anchors.bottom: parent.bottom
         anchors.right: parent.right

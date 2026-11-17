@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import Caelestia
 import qs.services
@@ -20,6 +21,15 @@ Singleton {
     property bool confirming: false
     property int confirmSecondsLeft: 0
     property var savedSpecs: []
+    property int _lastConnectedCount: 0
+    property var _knownMonitors: ({})
+    property var _recentlyDisabledAt: ({})
+    property var _pendingMirrorSpecs: []
+    property string _lastProjectionMode: ""
+    // Synchronous model of which non-disabled outputs are currently lit and where,
+    // because Hyprctl.monitors updates asynchronously (200ms debounce) and goes stale
+    // during rapid mode switching.
+    property var _effectiveLayout: ({})
 
     function identify(): void {
         identifying = true;
@@ -31,10 +41,54 @@ Singleton {
         identifyTimer.stop();
     }
 
+    function isSyntheticMonitor(mon: var): bool {
+        const name = String(mon?.name || "");
+        return name === "" || name === "FALLBACK" || name.startsWith("HEADLESS-");
+    }
+
+    function _rememberKnownMonitors(list: var): void {
+        if (!list || list.length === 0)
+            return;
+        const known = Object.assign({}, root._knownMonitors);
+        let changed = false;
+        for (let i = 0; i < list.length; i++) {
+            const m = list[i];
+            if (!m || root.isSyntheticMonitor(m))
+                continue;
+            known[m.name] = m;
+            changed = true;
+        }
+        if (changed)
+            root._knownMonitors = known;
+    }
+
     function sourceMonitors(): var {
-        if ((Hyprctl.monitors.length ?? 0) > 0)
-            return Hyprctl.monitors;
-        return Hypr.monitors.values ?? [];
+        const list = (Hyprctl.monitors.length ?? 0) > 0 ? Hyprctl.monitors : (Hypr.monitors.values ?? []);
+        return list.filter(m => m && !root.isSyntheticMonitor(m));
+    }
+
+    // Includes monitors that are temporarily absent from `hyprctl monitors all`
+    // during an HDMI Hot-Plug Detect (HPD) bounce right after being disabled.
+    function allConnectedMonitors(): var {
+        const live = root.sourceMonitors();
+        const seen = new Set(live.map(m => m.name));
+        const result = live.slice();
+        const known = root._knownMonitors ?? ({});
+        const recent = root._recentlyDisabledAt ?? ({});
+        const now = Date.now();
+        const knownNames = Object.keys(known);
+        for (let i = 0; i < knownNames.length; i++) {
+            const name = knownNames[i];
+            if (seen.has(name))
+                continue;
+            const disabledAt = recent[name] ?? 0;
+            const freshBounce = disabledAt > 0 && (now - disabledAt) < 4000;
+            const disabledInSaved = root.savedSpecs.some(s => s.name === name && s.disabled);
+            const disabledInLast = root.lastApplied.some(s => s.name === name && s.disabled);
+            if (freshBounce && (disabledInSaved || disabledInLast))
+                result.push(Object.assign({}, known[name], { disabled: true, mirrorOf: "none" }));
+        }
+        return result;
     }
 
     function enabledMonitors(): var {
@@ -65,7 +119,7 @@ Singleton {
     }
 
     function findMonitorByName(name: string): var {
-        return root.sourceMonitors().find(m => m.name === name) ?? null;
+        return root.sourceMonitors().find(m => m.name === name) ?? (root._knownMonitors ? root._knownMonitors[name] : null) ?? null;
     }
 
     function findMonitorById(id: int): var {
@@ -251,6 +305,8 @@ Singleton {
             mover.y = anchor.y + anchor.h;
         else if (dirY < 0)
             mover.y = anchor.y - mover.h;
+        else if (mover.x === anchor.x && mover.y === anchor.y)
+            mover.x = anchor.x + anchor.w;
         else {
             const right = anchor.x + anchor.w - mover.x;
             const left = mover.x + mover.w - anchor.x;
@@ -626,21 +682,294 @@ Singleton {
         return `eval ${lua}`;
     }
 
-    // One batch for the whole layout. Applying monitors one at a time makes
-    // Hyprland see transient overlaps and shuffle them itself.
+    function specRect(spec: var): var {
+        const parts = String(spec.resolution || "").split("x").map(Number);
+        const mon = root.findMonitorByName(spec.name);
+        const w = parts[0] || mon?.width || 1920;
+        const h = parts[1] || mon?.height || 1080;
+        const size = root.logicalSizeOf(w, h, spec.scale || 1, spec.transform ?? 0);
+        return {
+            x: Math.round(spec.x ?? 0),
+            y: Math.round(spec.y ?? 0),
+            w: size.w,
+            h: size.h
+        };
+    }
+
+    function hasActiveOverlap(active: var, name: string, rect: var): bool {
+        const names = Object.keys(active);
+        for (let i = 0; i < names.length; i++) {
+            const other = names[i];
+            if (other !== name && root.rectsOverlap(rect, active[other]))
+                return true;
+        }
+        return false;
+    }
+
+    function freeStagingPos(active: var): var {
+        const names = Object.keys(active);
+        if (names.length === 0)
+            return { x: 0, y: 0 };
+        let best = active[names[0]];
+        for (let i = 1; i < names.length; i++) {
+            const r = active[names[i]];
+            if (r.x + r.w > best.x + best.w)
+                best = r;
+        }
+        return { x: best.x + best.w, y: best.y };
+    }
+
+    function _seedActiveRects(): var {
+        const active = ({});
+        const effKeys = Object.keys(root._effectiveLayout ?? ({}));
+        if (effKeys.length > 0) {
+            for (let i = 0; i < effKeys.length; i++) {
+                const k = effKeys[i];
+                const r = root._effectiveLayout[k];
+                if (r)
+                    active[k] = { x: r.x, y: r.y, w: r.w, h: r.h };
+            }
+            return active;
+        }
+
+        const arranged = root.currentRects();
+        for (let i = 0; i < arranged.length; i++) {
+            const c = arranged[i];
+            active[c.name] = { x: c.x, y: c.y, w: c.w, h: c.h };
+        }
+        const enabled = root.enabledMonitors();
+        for (let i = 0; i < enabled.length; i++) {
+            const m = enabled[i];
+            if (active[m.name])
+                continue;
+            const size = root.logicalSize(m);
+            const rect = { x: Math.round(m.x ?? 0), y: Math.round(m.y ?? 0), w: size.w, h: size.h };
+            if (root.hasActiveOverlap(active, m.name, rect)) {
+                const stage = root.freeStagingPos(active);
+                active[m.name] = { x: stage.x, y: stage.y, w: size.w, h: size.h };
+            } else {
+                active[m.name] = rect;
+            }
+        }
+        return active;
+    }
+
+    function _syncEffectiveLayout(): void {
+        const live = root.enabledMonitors();
+        const arranged = root.currentRects();
+        const next = ({});
+        for (let i = 0; i < arranged.length; i++) {
+            const c = arranged[i];
+            next[c.name] = { x: c.x, y: c.y, w: c.w, h: c.h };
+        }
+        for (let i = 0; i < live.length; i++) {
+            const m = live[i];
+            if (next[m.name])
+                continue;
+            const size = root.logicalSize(m);
+            const rect = { x: Math.round(m.x ?? 0), y: Math.round(m.y ?? 0), w: size.w, h: size.h };
+            if (root.hasActiveOverlap(next, m.name, rect)) {
+                const stage = root.freeStagingPos(next);
+                next[m.name] = { x: stage.x, y: stage.y, w: size.w, h: size.h };
+            } else {
+                next[m.name] = rect;
+            }
+        }
+        root._effectiveLayout = next;
+    }
+
+    function _recordBatchEffect(batch: var): void {
+        const next = Object.assign({}, root._effectiveLayout);
+        for (let i = 0; i < batch.length; i++) {
+            const s = batch[i];
+            if (s.disabled) {
+                delete next[s.name];
+            } else {
+                const rect = root.specRect(s);
+                next[s.name] = { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
+            }
+        }
+        root._effectiveLayout = next;
+    }
+
+    // Order disables, non-mirroring layout moves/enables, and mirrors with temporary
+    // contiguous staging so Hyprland never observes transient overlaps OR drops to 0 active
+    // outputs (which would spawn a FALLBACK monitor mid-batch). Also keeps mirrored outputs
+    // at non-overlapping coordinates so checkOverlapsAndNotify() never trips in Loop 1.
+    function sanitizeSpecsForSend(specs: var): var {
+        if (!specs || specs.length === 0)
+            return [];
+
+        const active = root._seedActiveRects();
+        const ordered = [];
+        const pendingDisable = [];
+        const pendingLayout = [];
+        const pendingMirror = [];
+
+        for (let i = 0; i < specs.length; i++) {
+            const s = specs[i];
+            if (s.disabled)
+                pendingDisable.push(s);
+            else if (s.mirror)
+                pendingMirror.push(s);
+            else
+                pendingLayout.push(s);
+        }
+
+        const stagedOnce = ({});
+
+        for (let guard = 0; guard < 64 && (pendingDisable.length > 0 || pendingLayout.length > 0 || pendingMirror.length > 0); guard++) {
+            let progressed = false;
+
+            // 1. Place any non-mirroring layout spec that does not overlap any active output.
+            for (let i = 0; i < pendingLayout.length; i++) {
+                const s = pendingLayout[i];
+                const rect = root.specRect(s);
+                if (!root.hasActiveOverlap(active, s.name, rect)) {
+                    ordered.push(s);
+                    active[s.name] = rect;
+                    pendingLayout.splice(i, 1);
+                    progressed = true;
+                    break;
+                }
+            }
+            if (progressed)
+                continue;
+
+            const allLayoutLit = pendingLayout.every(p => !!active[p.name]);
+            const activeCount = Object.keys(active).length;
+
+            // 2. Only disable an active output once every non-disabled target layout output
+            // is already lit (or nothing remains to light), and another output remains active.
+            if (allLayoutLit && pendingDisable.length > 0) {
+                for (let i = 0; i < pendingDisable.length; i++) {
+                    const s = pendingDisable[i];
+                    if (!active[s.name] || activeCount > 1 || (pendingLayout.length === 0 && pendingMirror.length === 0)) {
+                        ordered.push(s);
+                        delete active[s.name];
+                        pendingDisable.splice(i, 1);
+                        progressed = true;
+                        break;
+                    }
+                }
+                if (progressed)
+                    continue;
+            }
+
+            // 3. Stage any unlit non-disabled layout output at a free position FIRST,
+            // guaranteeing active outputs stay >= 1 before anything is disabled.
+            const unlitIdx = pendingLayout.findIndex(s => !active[s.name]);
+            if (unlitIdx >= 0) {
+                const s = pendingLayout[unlitIdx];
+                const rect = root.specRect(s);
+                const stage = root.freeStagingPos(active);
+                ordered.push(Object.assign({}, s, stage));
+                active[s.name] = { x: stage.x, y: stage.y, w: rect.w, h: rect.h };
+                stagedOnce[s.name] = true;
+                continue;
+            }
+
+            // 4. All target layout outputs are lit; clear blockers so they can reach final rects.
+            if (allLayoutLit && pendingLayout.length > 0) {
+                let mirrorIdx = -1;
+                for (let i = 0; i < pendingMirror.length; i++) {
+                    const m = pendingMirror[i];
+                    const mActive = active[m.name];
+                    if (!mActive)
+                        continue;
+                    if (pendingLayout.some(l => l.name !== m.name && root.rectsOverlap(mActive, root.specRect(l)))) {
+                        mirrorIdx = i;
+                        break;
+                    }
+                }
+                if (mirrorIdx >= 0) {
+                    const m = pendingMirror[mirrorIdx];
+                    const rect = root.specRect(m);
+                    const target = root.hasActiveOverlap(active, m.name, rect) ? root.freeStagingPos(active) : rect;
+                    ordered.push(Object.assign({}, m, { x: target.x, y: target.y }));
+                    active[m.name] = { x: target.x, y: target.y, w: rect.w, h: rect.h };
+                    pendingMirror.splice(mirrorIdx, 1);
+                    continue;
+                }
+
+                let blockerIdx = pendingLayout.findIndex(b => !stagedOnce[b.name] && active[b.name] && pendingLayout.some(o => o.name !== b.name && root.rectsOverlap(active[b.name], root.specRect(o))));
+                if (blockerIdx < 0)
+                    blockerIdx = pendingLayout.findIndex(b => !stagedOnce[b.name] && !!active[b.name]);
+                if (blockerIdx >= 0) {
+                    const blocker = pendingLayout[blockerIdx];
+                    const rect = root.specRect(blocker);
+                    const stage = root.freeStagingPos(active);
+                    ordered.push(Object.assign({}, blocker, stage));
+                    active[blocker.name] = { x: stage.x, y: stage.y, w: rect.w, h: rect.h };
+                    stagedOnce[blocker.name] = true;
+                    continue;
+                }
+                break;
+            }
+
+            // 5. Place remaining mirror specs at non-overlapping coordinates.
+            if (pendingDisable.length === 0 && pendingLayout.length === 0 && pendingMirror.length > 0) {
+                const s = pendingMirror.shift();
+                const rect = root.specRect(s);
+                if (root.hasActiveOverlap(active, s.name, rect)) {
+                    const pos = root.freeStagingPos(active);
+                    ordered.push(Object.assign({}, s, pos));
+                    active[s.name] = { x: pos.x, y: pos.y, w: rect.w, h: rect.h };
+                } else {
+                    ordered.push(s);
+                    active[s.name] = rect;
+                }
+                continue;
+            }
+
+            break;
+        }
+
+        return ordered.concat(pendingDisable, pendingLayout, pendingMirror);
+    }
+
     function sendSpecs(specs: var): void {
         if (!specs || specs.length === 0)
             return;
-        Hypr.extras.batchMessage(specs.map(root.monitorCommand));
-        root.lastApplied = specs;
+
+        restoreTimer.stop();
+        verifyTimer.stop();
+        mirrorSyncTimer.stop();
+        failsafeTimer.stop();
+
+        const batch = root.sanitizeSpecsForSend(specs);
+        root._recordBatchEffect(batch);
+        const finalByName = ({});
+        for (let i = 0; i < batch.length; i++)
+            finalByName[batch[i].name] = batch[i];
+        const finalSpecs = Object.values(finalByName);
+
+        const now = Date.now();
+        const recent = Object.assign({}, root._recentlyDisabledAt);
+        for (let i = 0; i < finalSpecs.length; i++) {
+            const s = finalSpecs[i];
+            if (s.disabled)
+                recent[s.name] = now;
+            else
+                delete recent[s.name];
+        }
+        root._recentlyDisabledAt = recent;
+
+        const mirrors = finalSpecs.filter(s => !s.disabled && !!s.mirror);
+        root._pendingMirrorSpecs = mirrors;
+
+        Hypr.extras.batchMessage(batch.map(root.monitorCommand));
+        root.lastApplied = finalSpecs;
         Hyprctl.update();
+        if (mirrors.length > 0)
+            mirrorSyncTimer.restart();
         verifyTimer.restart();
     }
 
     // Every enabled monitor, exactly as it stands. Taken before a change so
     // there is something to go back to.
     function snapshotSpecs(): var {
-        return root.sourceMonitors().filter(m => m).map(m => root.specFor(m, ({})));
+        return root.allConnectedMonitors().filter(m => m).map(m => root.specFor(m, ({})));
     }
 
     // A mode, scale or rotation that the hardware cannot show leaves a black
@@ -684,6 +1013,7 @@ Singleton {
             return;
         root.savedSpecs = specs;
         storage.setText(JSON.stringify(specs, null, 2));
+        root.rememberArrangedPositions();
     }
 
     function rememberForReload(): void {
@@ -691,18 +1021,304 @@ Singleton {
             root.savedSpecs = root.snapshotSpecs();
     }
 
-    function restoreSaved(): void {
-        if (root.confirming || root.savedSpecs.length === 0)
+    function builtinMonitor(): var {
+        const all = root.allConnectedMonitors();
+        return all.find(m => /^(eDP|LVDS|DSI)/i.test(String(m.name || ""))) ?? all[0] ?? null;
+    }
+
+    function externalMonitors(): var {
+        const builtin = root.builtinMonitor();
+        return root.allConnectedMonitors().filter(m => !builtin || m.name !== builtin.name);
+    }
+
+    function currentProjectionMode(): string {
+        if ((root.lastApplied.length > 0 || verifyTimer.running || mirrorSyncTimer.running) && root._lastProjectionMode !== "")
+            return root._lastProjectionMode;
+
+        const enabled = root.enabledMonitors();
+        const builtin = root.builtinMonitor();
+        const externals = root.externalMonitors();
+
+        if (externals.length === 0 || (enabled.length === 1 && builtin && enabled[0].name === builtin.name))
+            return "pc";
+        if (enabled.some(m => root.isMirroring(m)))
+            return "duplicate";
+        if (builtin && (builtin.disabled ?? false) && enabled.length >= 1)
+            return "second";
+        return "extend";
+    }
+
+    function rememberArrangedPositions(): void {
+        const current = root.currentRects();
+        if (current.length <= 1 || root.layoutIssue(current) !== "")
+            return;
+        const positions = ({});
+        for (let i = 0; i < current.length; i++)
+            positions[current[i].name] = {
+                x: current[i].x,
+                y: current[i].y
+            };
+        persist.savedPositions = positions;
+        arrangementStorage.setText(JSON.stringify(positions, null, 2));
+    }
+
+    function applyProjectionMode(mode: string): void {
+        root._rememberKnownMonitors(root.sourceMonitors());
+        const all = root.allConnectedMonitors();
+        if (all.length === 0)
             return;
 
-        const specs = root.savedSpecs.filter(spec => {
+        if (root.lastApplied.length === 0 && !verifyTimer.running && !mirrorSyncTimer.running && root.currentProjectionMode() === "extend")
+            root.rememberArrangedPositions();
+
+        root._lastProjectionMode = mode;
+
+        const builtin = root.builtinMonitor();
+        const externals = root.externalMonitors();
+        const specs = [];
+
+        if (mode === "pc" || externals.length === 0) {
+            for (const ext of externals)
+                specs.push(root.specFor(ext, { disabled: true }));
+            if (builtin)
+                specs.push(root.specFor(builtin, { disabled: false, mirror: "", x: 0, y: 0 }));
+        } else if (mode === "duplicate") {
+            let curX = 0;
+            if (builtin) {
+                const builtinSize = root.logicalSize(builtin);
+                specs.push(root.specFor(builtin, { disabled: false, mirror: "", x: 0, y: 0 }));
+                curX = builtinSize.w;
+            }
+            const targetName = builtin ? builtin.name : externals[0].name;
+            for (const ext of externals) {
+                const extSize = root.logicalSize(ext);
+                if (ext.name === targetName) {
+                    specs.push(root.specFor(ext, { disabled: false, mirror: "", x: 0, y: 0 }));
+                    curX = Math.max(curX, extSize.w);
+                } else {
+                    specs.push(root.specFor(ext, { disabled: false, mirror: targetName, x: curX, y: 0 }));
+                    curX += extSize.w;
+                }
+            }
+        } else if (mode === "second") {
+            if (builtin)
+                specs.push(root.specFor(builtin, { disabled: true }));
+            let curX = 0;
+            for (const ext of externals) {
+                const size = root.logicalSize(ext);
+                specs.push(root.specFor(ext, { disabled: false, mirror: "", x: curX, y: 0 }));
+                curX += size.w;
+            }
+        } else {
+            // "extend": restore complete valid saved arrangement, otherwise tile horizontally
+            const saved = persist.savedPositions ?? ({});
+            const hasAllSaved = all.every(m => {
+                const p = saved[m.name];
+                return p && typeof p.x === "number" && typeof p.y === "number";
+            });
+
+            const rects = [];
+            if (hasAllSaved) {
+                for (const m of all) {
+                    const size = root.logicalSize(m);
+                    const p = saved[m.name];
+                    rects.push({
+                        id: m.id,
+                        name: m.name,
+                        x: Math.round(p.x),
+                        y: Math.round(p.y),
+                        w: size.w,
+                        h: size.h
+                    });
+                }
+            } else {
+                let curX = 0;
+                for (const m of all) {
+                    const size = root.logicalSize(m);
+                    rects.push({
+                        id: m.id,
+                        name: m.name,
+                        x: curX,
+                        y: 0,
+                        w: size.w,
+                        h: size.h
+                    });
+                    curX += size.w;
+                }
+            }
+
+            if (root.layoutIssue(rects) !== "")
+                root.solveLayout(rects, rects[0].id, 1, 0, true);
+            else
+                root.normalizeOrigin(rects);
+
+            for (const r of rects) {
+                const mon = root.findMonitorByName(r.name);
+                if (mon)
+                    specs.push(root.specFor(mon, { disabled: false, mirror: "", x: r.x, y: r.y }));
+            }
+        }
+
+        if (specs.length > 0) {
+            root.sendSpecs(specs);
+            root.savedSpecs = root.lastApplied;
+            storage.setText(JSON.stringify(root.savedSpecs, null, 2));
+        }
+    }
+
+    function recoverBuiltinDisplay(excludeName: string): void {
+        const all = root.allConnectedMonitors().filter(m => m.name !== excludeName);
+        if (all.length === 0)
+            return;
+
+        if (root.confirming) {
+            confirmTimer.stop();
+            root.confirming = false;
+            root.pendingRevert = [];
+            root.confirmSecondsLeft = 0;
+        }
+
+        const target = all.find(m => /^(eDP|LVDS|DSI)/i.test(String(m.name || ""))) ?? all[0];
+        if (!target)
+            return;
+
+        if (excludeName === "FALLBACK")
+            root._effectiveLayout = ({});
+
+        root.sendSpecs([root.specFor(target, {
+            disabled: false,
+            mirror: "",
+            x: 0,
+            y: 0
+        })]);
+    }
+
+    function ensureActiveDisplay(): void {
+        const all = root.sourceMonitors();
+        if (all.length === 0)
+            return;
+
+        const enabled = root.enabledMonitors();
+        // Zero real enabled displays (e.g. external unplugged while built-in was disabled)
+        // must always recover immediately, even if a confirmation timer was running.
+        if (enabled.length === 0) {
+            root.recoverBuiltinDisplay("");
+            return;
+        }
+
+        if (root.confirming || root.lastApplied.length > 0 || verifyTimer.running || restoreTimer.running || mirrorSyncTimer.running)
+            return;
+
+        if (enabled.length > 1) {
+            const rects = root.currentRects();
+            if (rects.length > 1 && root.layoutIssue(rects) !== "") {
+                const saved = persist.savedPositions ?? ({});
+                for (let i = 0; i < rects.length; i++) {
+                    const p = saved[rects[i].name];
+                    if (p && typeof p.x === "number" && typeof p.y === "number") {
+                        rects[i].x = Math.round(p.x);
+                        rects[i].y = Math.round(p.y);
+                    }
+                }
+                if (root.layoutIssue(rects) !== "")
+                    root.solveLayout(rects, rects[0].id, 1, 0, true);
+                else
+                    root.normalizeOrigin(rects);
+
+                const specs = [];
+                for (let i = 0; i < rects.length; i++) {
+                    const rect = rects[i];
+                    const mon = root.findMonitorByName(rect.name);
+                    if (!mon)
+                        continue;
+                    specs.push(root.specFor(mon, {
+                        x: rect.x,
+                        y: rect.y
+                    }));
+                }
+                root.sendSpecs(specs);
+            }
+        }
+    }
+
+    function restoreSaved(): void {
+        if (root.confirming || root.lastApplied.length > 0 || verifyTimer.running || mirrorSyncTimer.running)
+            return;
+
+        if (root.savedSpecs.length === 0) {
+            root.ensureActiveDisplay();
+            return;
+        }
+
+        // Never allow savedSpecs (e.g. built-in disabled while external was plugged in)
+        // to leave all currently connected monitors disabled.
+        const all = root.sourceMonitors();
+        const wouldEnable = all.some(m => {
+            const saved = root.savedSpecs.find(s => s.name === m.name);
+            return saved ? !saved.disabled : !(m.disabled ?? false);
+        });
+        if (!wouldEnable) {
+            root.ensureActiveDisplay();
+            return;
+        }
+
+        const validSpecs = root.savedSpecs.filter(spec => !!root.findMonitorByName(spec.name)).map(s => Object.assign({}, s));
+        // Complete with any currently connected monitor absent from savedSpecs so sending
+        // a subset never shoves a restored monitor on top of an already-active output.
+        for (let i = 0; i < all.length; i++) {
+            const m = all[i];
+            if (!validSpecs.some(s => s.name === m.name))
+                validSpecs.push(root.specFor(m, ({})));
+        }
+
+        const activeSpecs = validSpecs.filter(s => !s.disabled && !s.mirror);
+        if (activeSpecs.length > 1) {
+            const rects = activeSpecs.map(s => {
+                const mon = root.findMonitorByName(s.name);
+                const r = root.specRect(s);
+                return {
+                    id: mon?.id ?? 0,
+                    name: s.name,
+                    x: r.x,
+                    y: r.y,
+                    w: r.w,
+                    h: r.h
+                };
+            });
+            if (root.layoutIssue(rects) !== "") {
+                const savedPos = persist.savedPositions ?? ({});
+                for (let i = 0; i < rects.length; i++) {
+                    const p = savedPos[rects[i].name];
+                    if (p && typeof p.x === "number" && typeof p.y === "number") {
+                        rects[i].x = Math.round(p.x);
+                        rects[i].y = Math.round(p.y);
+                    }
+                }
+                if (root.layoutIssue(rects) !== "")
+                    root.solveLayout(rects, rects[0].id, 1, 0, true);
+                else
+                    root.normalizeOrigin(rects);
+
+                for (let i = 0; i < rects.length; i++) {
+                    const target = validSpecs.find(s => s.name === rects[i].name);
+                    if (target) {
+                        target.x = rects[i].x;
+                        target.y = rects[i].y;
+                    }
+                }
+            }
+        }
+
+        const hasDiff = validSpecs.some(spec => {
             const mon = root.findMonitorByName(spec.name);
             if (!mon)
                 return false;
             const current = root.specFor(mon, ({}));
             return JSON.stringify(current) !== JSON.stringify(spec);
         });
-        root.sendSpecs(specs);
+        if (hasDiff)
+            root.sendSpecs(validSpecs);
+        failsafeTimer.restart();
     }
 
     // Hyprland anchors the desktop at 0,0, so slide the whole arrangement back
@@ -711,19 +1327,21 @@ Singleton {
         root.normalizeOrigin(rects);
 
         const specs = [];
+        let changed = false;
         for (let i = 0; i < rects.length; i++) {
             const rect = rects[i];
             const mon = root.findMonitorByName(rect.name);
             if (!mon)
                 continue;
-            if (Math.round(mon.x ?? 0) === Math.round(rect.x) && Math.round(mon.y ?? 0) === Math.round(rect.y))
-                continue;
+            if (Math.round(mon.x ?? 0) !== Math.round(rect.x) || Math.round(mon.y ?? 0) !== Math.round(rect.y))
+                changed = true;
             specs.push(root.specFor(mon, {
                 x: rect.x,
                 y: rect.y
             }));
         }
-        root.apply(specs);
+        if (changed)
+            root.apply(specs);
     }
 
     // Changing mode, scale or rotation resizes the monitor, which can shove
@@ -742,7 +1360,7 @@ Singleton {
         if (target) {
             target.w = size.w;
             target.h = size.h;
-            root.solveLayout(rects, target.id, 0, 0, true);
+            root.solveLayout(rects, target.id, 1, 0, true);
         }
 
         const specs = [];
@@ -755,7 +1373,7 @@ Singleton {
                 spec.x = rect.x;
                 spec.y = rect.y;
                 specs.push(spec);
-            } else if (Math.round(other.x ?? 0) !== Math.round(rect.x) || Math.round(other.y ?? 0) !== Math.round(rect.y)) {
+            } else {
                 specs.push(root.specFor(other, {
                     x: rect.x,
                     y: rect.y
@@ -853,21 +1471,13 @@ Singleton {
 
             specs.push(root.specFor(mon, overrides));
         } else {
-            const positions = ({});
-            const current = root.currentRects();
-            for (let i = 0; i < current.length; i++)
-                positions[current[i].name] = {
-                    x: current[i].x,
-                    y: current[i].y
-                };
-            persist.savedPositions = positions;
-
-            rects = current.filter(r => r.name !== monitorName);
+            root.rememberArrangedPositions();
+            rects = root.currentRects().filter(r => r.name !== monitorName);
             specs.push(root.specFor(mon, overrides));
         }
 
         if (rects.length > 0)
-            root.solveLayout(rects, present ? mon.id : rects[0].id, 0, 0, true);
+            root.solveLayout(rects, present ? mon.id : rects[0].id, 1, 0, true);
 
         for (let i = 0; i < rects.length; i++) {
             const rect = rects[i];
@@ -877,7 +1487,7 @@ Singleton {
             if (rect.name === monitorName) {
                 specs[0].x = rect.x;
                 specs[0].y = rect.y;
-            } else if (Math.round(other.x ?? 0) !== rect.x || Math.round(other.y ?? 0) !== rect.y) {
+            } else {
                 specs.push(root.specFor(other, {
                     x: rect.x,
                     y: rect.y
@@ -958,8 +1568,25 @@ Singleton {
         });
     }
 
+    // When a mirror target was previously disabled, Hyprland's ensureMonitorStatus()
+    // evaluates setMirror() in Loop 1 before enabling the target in Loop 2. Re-sending
+    // the mirror rule once the target is active completes the mirror without a modeset.
+    Timer {
+        id: mirrorSyncTimer
+
+        interval: 150
+        onTriggered: {
+            const mirrors = root._pendingMirrorSpecs;
+            root._pendingMirrorSpecs = [];
+            if (!mirrors || mirrors.length === 0)
+                return;
+            Hypr.extras.batchMessage(mirrors.map(root.monitorCommand));
+            Hyprctl.update();
+        }
+    }
+
     // Hyprland occasionally lands somewhere else when several outputs move at
-    // once. Re-send only what actually drifted, and only once.
+    // once. Re-send the full layout once if anything drifted.
     Timer {
         id: verifyTimer
 
@@ -970,14 +1597,28 @@ Singleton {
             if (specs.length === 0)
                 return;
 
+            const live = root.sourceMonitors();
             const drift = specs.filter(spec => {
-                const mon = root.findMonitorByName(spec.name);
-                return mon && (Math.round(mon.x ?? 0) !== Math.round(spec.x) || Math.round(mon.y ?? 0) !== Math.round(spec.y));
+                const mon = live.find(m => m.name === spec.name) ?? null;
+                if (!mon)
+                    return false;
+                if (spec.disabled)
+                    return !(mon.disabled ?? false);
+                if (mon.disabled ?? false)
+                    return true;
+                const wantMirror = spec.mirror || "";
+                if (root.mirrorTargetName(mon) !== wantMirror)
+                    return true;
+                if (wantMirror)
+                    return false;
+                return Math.round(mon.x ?? 0) !== Math.round(spec.x ?? 0) || Math.round(mon.y ?? 0) !== Math.round(spec.y ?? 0);
             });
             if (drift.length === 0)
                 return;
 
-            Hypr.extras.batchMessage(drift.map(root.monitorCommand));
+            const retryBatch = root.sanitizeSpecsForSend(specs);
+            root._recordBatchEffect(retryBatch);
+            Hypr.extras.batchMessage(retryBatch.map(root.monitorCommand));
             Hyprctl.update();
         }
     }
@@ -1029,11 +1670,88 @@ Singleton {
         }
     }
 
+    FileView {
+        id: arrangementStorage
+
+        printErrors: false
+        path: `${Paths.state}/monitor-arrangement.json`
+        onLoaded: {
+            if (Object.keys(persist.savedPositions ?? ({})).length > 0)
+                return;
+            try {
+                const data = JSON.parse(text());
+                if (data && typeof data === "object" && !Array.isArray(data))
+                    persist.savedPositions = data;
+            } catch (e) {
+                console.error("Monitors: failed to parse saved arrangement", e);
+            }
+        }
+    }
+
     Timer {
         id: restoreTimer
 
-        interval: 1500
+        interval: 300
         onTriggered: root.restoreSaved()
+    }
+
+    Timer {
+        id: failsafeTimer
+
+        interval: 300
+        onTriggered: root.ensureActiveDisplay()
+    }
+
+    Connections {
+        function onMonitorsChanged(): void {
+            const live = root.sourceMonitors();
+            root._rememberKnownMonitors(live);
+            const settled = root.lastApplied.length === 0 && !verifyTimer.running && !mirrorSyncTimer.running;
+            if (settled) {
+                root._syncEffectiveLayout();
+                root._lastProjectionMode = "";
+            }
+            const count = live.length;
+            const hasSavedPositions = Object.keys(persist.savedPositions ?? ({})).length > 0;
+            if (!hasSavedPositions && settled && !root.confirming)
+                root.rememberArrangedPositions();
+            failsafeTimer.restart();
+            if (count > root._lastConnectedCount && root.savedSpecs.length > 0 && !root.confirming && settled)
+                restoreTimer.restart();
+            root._lastConnectedCount = count;
+        }
+
+        target: Hyprctl
+    }
+
+    Connections {
+        function onRawEvent(event: HyprlandEvent): void {
+            const n = event.name;
+            const data = String(event.data || "").trim();
+            if (n === "monitoradded" && data.startsWith("FALLBACK")) {
+                root.recoverBuiltinDisplay("FALLBACK");
+                Hyprctl.update();
+                failsafeTimer.restart();
+            } else if (n === "monitoradded" && data !== "") {
+                if (root.savedSpecs.some(s => s.name === data && s.disabled) && !root.confirming && root.lastApplied.length === 0)
+                    restoreTimer.restart();
+            } else if (n === "monitorremoved" && data !== "FALLBACK") {
+                if (root._effectiveLayout && root._effectiveLayout[data]) {
+                    const next = Object.assign({}, root._effectiveLayout);
+                    delete next[data];
+                    root._effectiveLayout = next;
+                }
+                const liveOther = (Hypr.monitors.values ?? []).some(m => m && !root.isSyntheticMonitor(m) && m.name !== data);
+                const pendingOther = root.lastApplied.some(s => s.name !== data && !s.disabled);
+                const cachedOther = root.enabledMonitors().some(m => m.name !== data);
+                if (!liveOther && !pendingOther && !cachedOther)
+                    root.recoverBuiltinDisplay(data);
+                Hyprctl.update();
+                failsafeTimer.restart();
+            }
+        }
+
+        target: Hyprland
     }
 
     Connections {

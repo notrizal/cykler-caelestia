@@ -16,6 +16,14 @@ Scope {
     // qmllint disable unresolved-type
     CustomShortcut {
         // qmllint enable unresolved-type
+        name: "displayProject"
+        description: "Cycle display projection mode"
+        onPressed: ShellState.forActive()?.displayProjectRequested()
+    }
+
+    // qmllint disable unresolved-type
+    CustomShortcut {
+        // qmllint enable unresolved-type
         name: "nexus"
         description: "Open nexus"
         onPressed: WindowFactory.create()

@@ -96,6 +96,7 @@ StyledWindow {
         screenState.launcher = false;
         screenState.session = false;
         screenState.dashboard = false;
+        screenState.displayProject = false;
         panels.popouts.close();
         panels.dock.closeAllPopups();
     }
@@ -108,7 +109,7 @@ StyledWindow {
     // the keyboard while any is up. So
     // does the timer panel, which has a field whether or not a tab is up behind it, and an empty
     // notification dock, where space starts the dino game
-    WlrLayershell.keyboardFocus: screenState.launcher || screenState.session || (screenState.sidebar && (screenState.notifPopoutTabKey !== "notifications" || screenState.timerPane || screenState.dinoGame || Notifs.list.every(n => n.closed))) ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: screenState.launcher || screenState.session || screenState.displayProject || (screenState.sidebar && (screenState.notifPopoutTabKey !== "notifications" || screenState.timerPane || screenState.dinoGame || Notifs.list.every(n => n.closed))) ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
     mask: hasFullscreen ? emptyRegion : regions
 
@@ -173,7 +174,7 @@ StyledWindow {
         active: {
             const s = root.screenState;
             const conf = root.contentItem.Config;
-            if ((s.launcher && conf.launcher.enabled) || (s.session && conf.session.enabled) || (s.sidebar && conf.sidebar.enabled))
+            if ((s.launcher && conf.launcher.enabled) || (s.session && conf.session.enabled) || (s.sidebar && conf.sidebar.enabled) || s.displayProject)
                 return true;
             if (!conf.dashboard.showOnHover && s.dashboard && conf.dashboard.enabled)
                 return true;
@@ -189,6 +190,7 @@ StyledWindow {
             root.screenState.session = false;
             root.screenState.sidebar = false;
             root.screenState.dashboard = false;
+            root.screenState.displayProject = false;
             panels.popouts.hasCurrent = false;
             panels.dock.closeAllPopups();
             bar.closeTray();
@@ -385,6 +387,14 @@ StyledWindow {
         }
 
         PanelBg {
+            id: displayProjectBg
+
+            panel: panels.displayProject
+            deformAmount: 0.15
+            implicitWidth: panels.displayProject.offsetScale < 0.999 ? panel.width : 0
+        }
+
+        PanelBg {
             id: popoutBg
 
             // Extra width to prevent vertical movement deformation partially detaching panel from bar
@@ -477,6 +487,9 @@ StyledWindow {
             }
             utilities.transform: Matrix4x4 {
                 matrix: utilsBg.deformMatrix
+            }
+            displayProject.transform: Matrix4x4 {
+                matrix: displayProjectBg.deformMatrix
             }
             popouts.transform: Matrix4x4 {
                 matrix: popoutBg.deformMatrix
