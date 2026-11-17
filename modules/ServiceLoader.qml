@@ -18,6 +18,7 @@ Scope {
         UpdateChecker;
         SpecialWorkspaceGuard;
         ResourceHistory;
+        WallpaperPauser;
         Weather.reload();
 
         if (GlobalConfig.utilities.vpn.enabled)

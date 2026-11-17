@@ -114,6 +114,12 @@ Item {
             const arrowModifiers = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier;
             const plainArrow = (event.key === Qt.Key_Left || event.key === Qt.Key_Right) && !(event.modifiers & arrowModifiers);
 
+            if (list.showWallpapers && (event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_Tab) {
+                Wallpapers.setWallpaperMode(Wallpapers.wallpaperMode === "static" ? "animated" : "static");
+                event.accepted = true;
+                return;
+            }
+
             if (list.showWallpapers && plainArrow) {
                 if (event.key === Qt.Key_Left)
                     list.currentList?.decrementCurrentIndex();

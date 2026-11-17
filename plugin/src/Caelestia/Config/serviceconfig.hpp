@@ -91,6 +91,8 @@ class ServiceConfig : public settings::ObjectNode {
     // setup of anyone who merely updates the shell
     CONFIG_GLOBAL_PROPERTY(bool, equalizer, false)
     CONFIG_GLOBAL_PROPERTY(bool, smartScheme, true)
+    // Sync primary palette colour to ASUS laptop keyboard backlight via asusctl when installed
+    CONFIG_GLOBAL_PROPERTY(bool, asusRgbSync, true)
     CONFIG_GLOBAL_PROPERTY(QString, defaultPlayer, u"Spotify"_s)
     CONFIG_GLOBAL_LIST(PlayerAliasList, playerAliases,
         DEFAULT_ARG({

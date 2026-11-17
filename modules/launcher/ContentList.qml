@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Layouts
 import Caelestia.Config
 import Caelestia.I18n
 import qs.components
@@ -21,6 +22,7 @@ Item {
 
     readonly property bool showWallpapers: search.text.startsWith(`${GlobalConfig.launcher.actionPrefix}wallpaper `)
     readonly property var currentList: showWallpapers ? wallpaperList.item : appList.item // Can be either ListView or PathView, so can't type properly
+
     property string animState: showWallpapers ? "wallpapers" : "apps"
 
     anchors.horizontalCenter: parent.horizontalCenter
@@ -49,7 +51,7 @@ Item {
 
             PropertyChanges {
                 root.implicitWidth: Math.max(root.Tokens.sizes.launcher.itemWidth * 1.2, wallpaperList.implicitWidth)
-                root.implicitHeight: root.Tokens.sizes.launcher.wallpaperHeight
+                root.implicitHeight: wallpaperList.implicitHeight > 0 ? wallpaperList.implicitHeight : root.Tokens.sizes.launcher.wallpaperHeight
                 wallpaperList.active: true
             }
         }
@@ -73,6 +75,18 @@ Item {
                 type: Anim.DefaultEffects
             }
         }
+    }
+
+    Behavior on implicitWidth {
+        enabled: root.screenState.launcher
+
+        Anim {}
+    }
+
+    Behavior on implicitHeight {
+        enabled: root.screenState.launcher
+
+        Anim {}
     }
 
     Loader {
@@ -100,13 +114,77 @@ Item {
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
 
-        sourceComponent: WallpaperList {
-            objectName: "launcherWallpaperList"
+        sourceComponent: ColumnLayout {
+            id: wallpaperContainer
 
-            search: root.search
-            screenState: root.screenState
-            panels: root.panels
-            content: root.content
+            property alias count: listComp.count
+            property alias currentItem: listComp.currentItem
+
+            function incrementCurrentIndex(): void {
+                listComp.incrementCurrentIndex();
+            }
+
+            function decrementCurrentIndex(): void {
+                listComp.decrementCurrentIndex();
+            }
+
+            spacing: root.Tokens.spacing.small
+            implicitWidth: Math.max(modeRow.implicitWidth, listComp.implicitWidth)
+
+            RowLayout {
+                id: modeRow
+
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: Tokens.padding.small
+                spacing: Tokens.spacing.medium
+
+                IconTextButton {
+                    icon: "image"
+                    text: Tr.tr("Static")
+                    font: Tokens.font.label.medium
+                    isRound: true
+                    horizontalPadding: Tokens.padding.medium
+                    verticalPadding: Tokens.padding.extraSmall
+                    type: Wallpapers.wallpaperMode === "static" ? IconTextButton.Filled : IconTextButton.Tonal
+                    onClicked: Wallpapers.setWallpaperMode("static")
+                }
+
+                IconTextButton {
+                    icon: "movie"
+                    text: Tr.tr("Animated")
+                    font: Tokens.font.label.medium
+                    isRound: true
+                    horizontalPadding: Tokens.padding.medium
+                    verticalPadding: Tokens.padding.extraSmall
+                    type: Wallpapers.wallpaperMode === "animated" ? IconTextButton.Filled : IconTextButton.Tonal
+                    onClicked: Wallpapers.setWallpaperMode("animated")
+                }
+
+                IconTextButton {
+                    visible: Wallpapers.wallpaperMode === "animated"
+                    icon: "refresh"
+                    text: Wallpapers.extractingThumbs ? Tr.tr("Processing...") : Tr.tr("Refresh")
+                    disabled: Wallpapers.extractingThumbs
+                    font: Tokens.font.label.medium
+                    isRound: true
+                    horizontalPadding: Tokens.padding.medium
+                    verticalPadding: Tokens.padding.extraSmall
+                    type: IconTextButton.Tonal
+                    onClicked: Wallpapers.refreshAnimatedThumbs(true)
+                }
+            }
+
+            WallpaperList {
+                id: listComp
+
+                objectName: "launcherWallpaperList"
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredHeight: root.Tokens.sizes.launcher.wallpaperHeight
+                search: root.search
+                screenState: root.screenState
+                panels: root.panels
+                content: root.content
+            }
         }
     }
 
@@ -121,9 +199,10 @@ Item {
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: root.state === "wallpapers" ? Tokens.padding.large : 0
 
         MaterialIcon {
-            text: root.state === "wallpapers" ? "wallpaper_slideshow" : "manage_search"
+            text: root.state === "wallpapers" ? (Wallpapers.wallpaperMode === "animated" ? "movie" : "wallpaper_slideshow") : "manage_search"
             color: Colours.palette.m3onSurfaceVariant
             fontStyle: Tokens.font.icon.extraLarge
 
@@ -134,13 +213,21 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
 
             StyledText {
-                text: root.state === "wallpapers" ? Tr.tr("No wallpapers found") : Tr.tr("No results")
+                text: root.state === "wallpapers" ? (Wallpapers.wallpaperMode === "animated" ? Tr.tr("No animated wallpapers found") : Tr.tr("No wallpapers found")) : Tr.tr("No results")
                 color: Colours.palette.m3onSurfaceVariant
                 font: Tokens.font.body.builders.large.weight(Font.Medium).build()
             }
 
             StyledText {
-                text: root.state === "wallpapers" && Wallpapers.list.length === 0 ? Tr.tr("Try putting some wallpapers in %1").arg(Paths.shortenHome(Paths.wallsdir)) : Tr.tr("Try searching for something else")
+                text: {
+                    if (root.state !== "wallpapers")
+                        return Tr.tr("Try searching for something else");
+                    if (Wallpapers.list.length === 0) {
+                        const targetDir = Wallpapers.wallpaperMode === "animated" ? `${Paths.wallsdir}/Animated` : Paths.wallsdir;
+                        return Tr.tr("Try putting some wallpapers in %1").arg(Paths.shortenHome(targetDir));
+                    }
+                    return Tr.tr("Try searching for something else");
+                }
                 color: Colours.palette.m3onSurfaceVariant
                 font: Tokens.font.body.medium
             }
@@ -155,17 +242,5 @@ Item {
         Behavior on scale {
             Anim {}
         }
-    }
-
-    Behavior on implicitWidth {
-        enabled: root.screenState.launcher
-
-        Anim {}
-    }
-
-    Behavior on implicitHeight {
-        enabled: root.screenState.launcher
-
-        Anim {}
     }
 }

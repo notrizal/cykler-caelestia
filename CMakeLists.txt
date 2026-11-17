@@ -77,6 +77,7 @@ if("shell" IN_LIST ENABLE_MODULES)
     # Runtime helper the process list spawns through Quickshell.shellPath; the
     # dev-only scripts beside it stay out of the install
     install(PROGRAMS scripts/caelestia-process-monitor.py DESTINATION "${INSTALL_QSCONFDIR}/scripts")
+    install(PROGRAMS scripts/caelestia-extract-videothumbs.py DESTINATION "${INSTALL_QSCONFDIR}/scripts")
 
     file(READ shell.qml SHELL_QML)
     string(REPLACE "settings.watchFiles: true" "settings.watchFiles: false" SHELL_QML "${SHELL_QML}")

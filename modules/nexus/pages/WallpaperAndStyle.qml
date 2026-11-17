@@ -14,6 +14,38 @@ import qs.modules.nexus.common
 PageBase {
     id: root
 
+    readonly property int startupHwDecoder: GlobalConfig.background.videoHwDecoder
+    readonly property list<MenuItem> hwDecoderItems: [
+        MenuItem {
+            text: Tr.tr("Auto")
+            value: VideoHwDecoder.Auto
+        },
+        MenuItem {
+            text: Tr.tr("Software")
+            value: VideoHwDecoder.None
+        },
+        MenuItem {
+            text: "VAAPI"
+            value: VideoHwDecoder.Vaapi
+        },
+        MenuItem {
+            text: "VDPAU"
+            value: VideoHwDecoder.Vdpau
+        },
+        MenuItem {
+            text: "CUDA"
+            value: VideoHwDecoder.Cuda
+        },
+        MenuItem {
+            text: "Vulkan"
+            value: VideoHwDecoder.Vulkan
+        },
+        MenuItem {
+            text: "DRM"
+            value: VideoHwDecoder.Drm
+        }
+    ]
+
     // TRANSLATORS: %1 = an opacity from 0 to 100
     function percent(value: real): string {
         return Tr.tr("%1%").arg(Math.round(value * 100));
@@ -76,6 +108,7 @@ PageBase {
 
             WallpaperImpl {
                 anchors.fill: parent
+                allowVideo: false
                 opacity: Config.background.wallpaperEnabled ? 1 : 0
 
                 Behavior on opacity {
@@ -116,72 +149,125 @@ PageBase {
             }
         }
 
-        ToggleRow {
-            first: true
-            // SEARCH: background image desktop picture
-            text: Tr.tr("Display wallpaper")
-            checked: Config.background.wallpaperEnabled
-            onToggled: GlobalConfig.background.wallpaperEnabled = checked
-        }
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: Tokens.spacing.extraSmall / 2
 
-        ToggleRow {
-            Layout.topMargin: Tokens.spacing.extraSmall / 2 - parent.spacing
+            ToggleRow {
+                first: true
+                // SEARCH: background image desktop picture
+                text: Tr.tr("Display wallpaper")
+                checked: Config.background.wallpaperEnabled
+                onToggled: GlobalConfig.background.wallpaperEnabled = checked
+            }
 
-            // SEARCH: opacity translucent see through
-            text: Tr.tr("Transparency")
-            // TRANSLATORS: %1/%2 = opacity values from 0 to 1 for the base surface and layered surfaces
-            subtext: Tr.tr("Base %1, layers %2").arg(Colours.transparency.base).arg(Colours.transparency.layers)
-            checked: Colours.transparency.enabled
-            onToggled: GlobalConfig.appearance.transparency.enabled = checked
-        }
+            ToggleRow {
+                // SEARCH: opacity translucent see through
+                text: Tr.tr("Transparency")
+                // TRANSLATORS: %1/%2 = opacity values from 0 to 1 for the base surface and layered surfaces
+                subtext: Tr.tr("Base %1, layers %2").arg(Colours.transparency.base).arg(Colours.transparency.layers)
+                checked: Colours.transparency.enabled
+                onToggled: GlobalConfig.appearance.transparency.enabled = checked
+            }
 
-        // NOTE(fork): how long everything the shell animates takes, as a multiplier on the whole
-        // set of durations at once. The defaults are Material 3's expressive ones, which are on the
-        // slow side for a panel that opens and closes all day; below 1 the shell moves the same way,
-        // just more briskly. 0 would stop the motion being animation at all, so it stops short of it.
-        StepperRow {
-            last: true
-            label: Tr.tr("Animation speed")
-            subtext: Tr.tr("How long the shell's own animations take, as a multiple of the usual; lower is quicker")
-            value: Config.appearance.anim.durations.scale
-            from: 0.1
-            to: 2
-            stepSize: 0.05
-            onMoved: v => GlobalConfig.appearance.anim.durations.scale = v
-        }
+            // NOTE(fork): how long everything the shell animates takes, as a multiplier on the whole
+            // set of durations at once. The defaults are Material 3's expressive ones, which are on the
+            // slow side for a panel that opens and closes all day; below 1 the shell moves the same way,
+            // just more briskly. 0 would stop the motion being animation at all, so it stops short of it.
+            StepperRow {
+                last: true
+                label: Tr.tr("Animation speed")
+                subtext: Tr.tr("How long the shell's own animations take, as a multiple of the usual; lower is quicker")
+                value: Config.appearance.anim.durations.scale
+                from: 0.1
+                to: 2
+                stepSize: 0.05
+                onMoved: v => GlobalConfig.appearance.anim.durations.scale = v
+            }
 
-        // NOTE(fork): window transparency is Hyprland's, not the shell's - the Transparency
-        // switch above only reaches the shell's own panels and popups, while this reaches every
-        // window on screen. It is one value rather than a focused/unfocused pair because the
-        // dots pin all non-fullscreen windows to a single opacity; see services/WindowSettings.
-        SectionHeader {
-            text: Tr.tr("Windows")
-        }
+            SectionHeader {
+                text: Tr.tr("Animated wallpapers")
+            }
 
-        StepperRow {
-            first: true
-            // SEARCH: corner radius rounded corners window rounding
-            label: Tr.tr("Window corner radius")
-            subtext: Tr.tr("Radius of every window's corners, in pixels; the border around the desktop follows it")
-            value: WindowSettings.rounding
-            from: 0
-            to: 40
-            stepSize: 1
-            onMoved: v => WindowSettings.setRounding(v)
-        }
+            SelectRow {
+                first: true
+                // SEARCH: video hardware decoder vaapi vulkan cuda vdpau drm ffmpeg
+                label: Tr.tr("Video hardware decoder")
+                subtext: Tr.tr("Decoder backend for animated wallpapers; restart the shell after changing")
+                menuItems: root.hwDecoderItems
+                active: root.hwDecoderItems.find(i => i.value === GlobalConfig.background.videoHwDecoder) ?? root.hwDecoderItems[0]
+                onSelected: item => {
+                    GlobalConfig.background.videoHwDecoder = item.value;
+                    WallpaperPauser.syncHwDecoderCache();
+                }
+            }
 
-        SliderRow {
-            last: true
-            icon: "web_asset"
-            label: Tr.tr("Window opacity")
-            valueLabel: root.percent(WindowSettings.value)
-            value: WindowSettings.value
-            // A window you are working in has to stay readable, so it can go a little
-            // see-through but not far
-            from: 0.5
-            to: 1
-            stepSize: 0.01
-            onMoved: v => WindowSettings.set(v)
+            RowButton {
+                visible: GlobalConfig.background.videoHwDecoder !== root.startupHwDecoder
+                icon: "restart_alt"
+                text: Tr.tr("Restart shell to apply decoder")
+                subtext: Tr.tr("Reloads the shell and reopens this page")
+                onClicked: ShellUpdater.restartAndReopen("wallpaper")
+            }
+
+            ToggleRow {
+                // SEARCH: animated wallpaper battery pause power
+                text: Tr.tr("Pause animated wallpapers on battery")
+                subtext: Tr.tr("Freeze video playback while unplugged to save power")
+                checked: GlobalConfig.background.pauseVideoOnBattery
+                onToggled: GlobalConfig.background.pauseVideoOnBattery = checked
+            }
+
+            ToggleRow {
+                // SEARCH: animated wallpaper pause windows fullscreen overlap
+                text: Tr.tr("Pause animated wallpapers behind windows")
+                subtext: Tr.tr("Freeze video playback when fullscreen, covered by 2+ windows, or ≥70% covered")
+                checked: GlobalConfig.background.pauseVideoBehindWindows
+                onToggled: GlobalConfig.background.pauseVideoBehindWindows = checked
+            }
+
+            ToggleRow {
+                last: true
+                // SEARCH: asus asusctl keyboard rgb backlight aura sync
+                text: Tr.tr("Sync ASUS keyboard RGB")
+                subtext: Tr.tr("Match keyboard backlight to the theme primary colour when asusctl is installed")
+                checked: GlobalConfig.services.asusRgbSync
+                onToggled: GlobalConfig.services.asusRgbSync = checked
+            }
+
+            // NOTE(fork): window transparency is Hyprland's, not the shell's - the Transparency
+            // switch above only reaches the shell's own panels and popups, while this reaches every
+            // window on screen. It is one value rather than a focused/unfocused pair because the
+            // dots pin all non-fullscreen windows to a single opacity; see services/WindowSettings.
+            SectionHeader {
+                text: Tr.tr("Windows")
+            }
+
+            StepperRow {
+                first: true
+                // SEARCH: corner radius rounded corners window rounding
+                label: Tr.tr("Window corner radius")
+                subtext: Tr.tr("Radius of every window's corners, in pixels; the border around the desktop follows it")
+                value: WindowSettings.rounding
+                from: 0
+                to: 40
+                stepSize: 1
+                onMoved: v => WindowSettings.setRounding(v)
+            }
+
+            SliderRow {
+                last: true
+                icon: "web_asset"
+                label: Tr.tr("Window opacity")
+                valueLabel: root.percent(WindowSettings.value)
+                value: WindowSettings.value
+                // A window you are working in has to stay readable, so it can go a little
+                // see-through but not far
+                from: 0.5
+                to: 1
+                stepSize: 0.01
+                onMoved: v => WindowSettings.set(v)
+            }
         }
     }
 }

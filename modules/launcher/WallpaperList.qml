@@ -16,7 +16,6 @@ PathView {
     required property var content
 
     readonly property int itemWidth: Tokens.sizes.launcher.wallpaperWidth * 0.8 + Tokens.padding.medium * 2
-
     readonly property int numItems: {
         const screen = (QsWindow.window as QsWindow)?.screen;
         if (!screen)
@@ -44,21 +43,15 @@ PathView {
         return visible;
     }
 
-    model: ScriptModel {
-        id: scriptModel
+    function preferredIndex(values: var, searchText: string): int {
+        if (searchText || !values || values.length === 0)
+            return 0;
 
-        readonly property string search: root.search.text.split(" ").slice(1).join(" ")
-
-        values: Wallpapers.query(search)
-        onValuesChanged: root.currentIndex = search ? 0 : values.findIndex(w => w.path === Wallpapers.actualCurrent)
-    }
-
-    Component.onCompleted: currentIndex = Wallpapers.list.findIndex(w => w.path === Wallpapers.actualCurrent)
-    Component.onDestruction: Wallpapers.stopPreview()
-
-    onCurrentItemChanged: {
-        if (currentItem)
-            Wallpapers.preview((currentItem as WallpaperItem).modelData.path);
+        const preferred = Wallpapers.wallpaperMode === "animated" ? Wallpapers.lastAnimated : Wallpapers.lastStatic;
+        let idx = preferred ? values.findIndex(w => w.path === preferred) : -1;
+        if (idx < 0)
+            idx = values.findIndex(w => w.path === Wallpapers.actualCurrent);
+        return Math.max(0, idx);
     }
 
     implicitWidth: Math.min(numItems, count) * itemWidth
@@ -69,6 +62,19 @@ PathView {
     preferredHighlightBegin: 0.5
     preferredHighlightEnd: 0.5
     highlightRangeMode: PathView.StrictlyEnforceRange
+
+    onCurrentItemChanged: previewDebounce.restart()
+    Component.onCompleted: currentIndex = preferredIndex(Wallpapers.list, "")
+    Component.onDestruction: Wallpapers.stopPreview()
+
+    model: ScriptModel {
+        id: scriptModel
+
+        readonly property string search: root.search.text.split(" ").slice(1).join(" ")
+
+        values: Wallpapers.query(search)
+        onValuesChanged: root.currentIndex = root.preferredIndex(values, search)
+    }
 
     delegate: WallpaperItem {
         screenState: root.screenState
@@ -92,6 +98,17 @@ PathView {
         PathLine {
             x: root.width
             relativeY: 0
+        }
+    }
+
+    Timer {
+        id: previewDebounce
+
+        interval: 100
+        repeat: false
+        onTriggered: {
+            if (root.currentItem)
+                Wallpapers.preview((root.currentItem as WallpaperItem).modelData.path);
         }
     }
 

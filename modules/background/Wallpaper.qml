@@ -56,8 +56,8 @@ Item {
                             id: dialog
 
                             title: Tr.tr("Select a wallpaper")
-                            filterLabel: Tr.tr("Image files")
-                            filters: Images.validImageExtensions
+                            filterLabel: Tr.tr("Wallpaper files")
+                            filters: Images.validImageExtensions.concat(Wallpapers.validVideoExtensions)
                             onAccepted: path => Wallpapers.setWallpaper(path)
                         }
 

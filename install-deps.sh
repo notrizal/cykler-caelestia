@@ -44,7 +44,7 @@ LIST_FEATURES="${LIST_FEATURES:-false}"
 #   fails outright if any of them is missing
 REQ_REPO=(
     git cmake ninja qt6-shadertools python
-    qt6-base qt6-declarative qt6-imageformats qt6-multimedia
+    qt6-base qt6-declarative qt6-imageformats qt6-multimedia qt6-multimedia-ffmpeg ffmpeg
     libqalculate libpipewire aubio taglib
 )
 

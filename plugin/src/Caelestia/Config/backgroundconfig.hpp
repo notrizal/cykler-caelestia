@@ -169,6 +169,10 @@ class BackgroundConfig : public settings::ObjectNode {
     CONFIG_GLOBAL_PROPERTY(bool, randomWallpaperOnStart, false)
     CONFIG_GLOBAL_PROPERTY(bool, wallpaperCycle, false)
     CONFIG_GLOBAL_PROPERTY(int, wallpaperCycleInterval, 1800000)
+    // Video wallpaper hardware decoding & smart pausing
+    CONFIG_GLOBAL_ENUM_PROPERTY(VideoHwDecoder, videoHwDecoder, VideoHwDecoder::Auto)
+    CONFIG_GLOBAL_PROPERTY(bool, pauseVideoOnBattery, false)
+    CONFIG_GLOBAL_PROPERTY(bool, pauseVideoBehindWindows, true)
     CONFIG_SUBOBJECT(DesktopClock, desktopClock)
     CONFIG_SUBOBJECT(DesktopIcons, desktopIcons)
     CONFIG_SUBOBJECT(DesktopWidgets, desktopWidgets)

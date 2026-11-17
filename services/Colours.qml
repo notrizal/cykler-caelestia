@@ -28,6 +28,32 @@ Singleton {
 
     property bool cooldownPending
     property real lastBaseTransparency
+    property bool _asusctlChecked
+    property bool _asusctlAvailable
+    property string _pendingAsusHex
+
+    function boostSaturation(c: color): color {
+        return Qt.hsla(c.hslHue, Math.min(1.0, c.hslSaturation * 1.1), c.hslLightness, c.a);
+    }
+
+    function syncKeyboardRgb(primaryHex: string): void {
+        if (!GlobalConfig.services.asusRgbSync || !primaryHex)
+            return;
+
+        const baseColor = boostSaturation(`#${primaryHex}`);
+        const r = Math.round(baseColor.r * 255).toString(16).padStart(2, "0");
+        const g = Math.round(baseColor.g * 255).toString(16).padStart(2, "0");
+        const b = Math.round(baseColor.b * 255).toString(16).padStart(2, "0");
+        const hex = `${r}${g}${b}`;
+
+        if (!_asusctlChecked) {
+            _pendingAsusHex = hex;
+            asusctlCheckProc.running = true;
+            return;
+        }
+        if (_asusctlAvailable)
+            Quickshell.execDetached(["/usr/bin/asusctl", "aura", "effect", "static", "-c", hex]);
+    }
 
     function getLuminance(c: color): real {
         if (c.r == 0 && c.g == 0 && c.b == 0)
@@ -78,6 +104,9 @@ Singleton {
             if (colours.hasOwnProperty(propName))
                 colours[propName] = `#${colour}`;
         }
+
+        if (!isPreview && scheme.colours.primary)
+            syncKeyboardRgb(scheme.colours.primary);
     }
 
     function setMode(mode: string): void {
@@ -125,7 +154,31 @@ Singleton {
     ImageAnalyser {
         id: analyser
 
-        source: Wallpapers.current
+        source: Wallpapers.isVideo(Wallpapers.current) ? Wallpapers.thumbFilePath(Wallpapers.current) : Wallpapers.current
+    }
+
+    Connections {
+        function onThumbExtracted(path: string): void {
+            if (Wallpapers.isVideo(Wallpapers.current) && Wallpapers.cleanPath(Wallpapers.current) === path) {
+                analyser.source = "";
+                analyser.source = Wallpapers.thumbFilePath(Wallpapers.current);
+            }
+        }
+
+        target: Wallpapers
+    }
+
+    Process {
+        id: asusctlCheckProc
+
+        command: ["test", "-x", "/usr/bin/asusctl"]
+        onExited: exitCode => {
+            root._asusctlChecked = true;
+            root._asusctlAvailable = exitCode === 0;
+            if (root._asusctlAvailable && root._pendingAsusHex)
+                Quickshell.execDetached(["/usr/bin/asusctl", "aura", "effect", "static", "-c", root._pendingAsusHex]);
+            root._pendingAsusHex = "";
+        }
     }
 
     Timer {

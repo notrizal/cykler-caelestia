@@ -17,6 +17,15 @@ import qs.modules.nexus.common
 PageBase {
     id: root
 
+    readonly property bool isAnimatedMode: Wallpapers.wallpaperMode === "animated"
+    readonly property string animatedRootDir: `${Paths.wallsdir}/Animated`
+    readonly property bool flatAnimatedDir: {
+        if (!isAnimatedMode)
+            return false;
+        const walls = Wallpapers.animatedList;
+        return walls.length > 0 && walls.every(w => w.parentDir === animatedRootDir);
+    }
+
     title: Tr.tr("Wallpapers")
     isSubPage: true
 
@@ -25,6 +34,23 @@ PageBase {
         anchors.top: parent.top
         width: root.cappedWidth
         spacing: Tokens.spacing.small
+
+        SegmentedBar {
+            Layout.alignment: Qt.AlignHCenter
+            Layout.bottomMargin: Tokens.spacing.small
+            currentIndex: root.isAnimatedMode ? 1 : 0
+            model: [
+                {
+                    icon: "image",
+                    text: Tr.tr("Static")
+                },
+                {
+                    icon: "movie",
+                    text: Tr.tr("Animated")
+                }
+            ]
+            onActivated: idx => Wallpapers.setWallpaperMode(idx === 1 ? "animated" : "static")
+        }
 
         ButtonRow {
             Layout.bottomMargin: Tokens.spacing.medium
@@ -44,9 +70,9 @@ PageBase {
                 FileDialog {
                     id: browseDialog
 
-                    title: Tr.tr("Select an image")
-                    filterLabel: Tr.tr("Image files")
-                    filters: Images.validImageExtensions
+                    title: root.isAnimatedMode ? Tr.tr("Select a video wallpaper") : Tr.tr("Select an image")
+                    filterLabel: root.isAnimatedMode ? Tr.tr("Video files") : Tr.tr("Image files")
+                    filters: root.isAnimatedMode ? Wallpapers.validVideoExtensions : Images.validImageExtensions
                     onAccepted: path => {
                         Wallpapers.setWallpaper(path);
                         root.nState.closeSubPage();
@@ -67,6 +93,20 @@ PageBase {
                     Wallpapers.setRandom();
                     root.nState.closeSubPage();
                 }
+            }
+
+            IconTextButton {
+                visible: root.isAnimatedMode
+                icon: "refresh"
+                text: Wallpapers.extractingThumbs ? Tr.tr("Processing...") : Tr.tr("Refresh")
+                disabled: Wallpapers.extractingThumbs
+                font: Tokens.font.body.large
+                isRound: true
+                shapeMorph: true
+                horizontalPadding: Tokens.padding.extraLarge
+                verticalPadding: Tokens.padding.medium
+                type: IconTextButton.Tonal
+                onClicked: Wallpapers.refreshAnimatedThumbs(true)
             }
         }
 
@@ -105,6 +145,7 @@ PageBase {
 
         WallItem {
             Layout.topMargin: Tokens.spacing.medium
+            visible: !root.isAnimatedMode
             imgHeight: Math.round(width * 0.3)
             radius: Tokens.rounding.extraLarge
             source: Quickshell.shellPath("assets/wallpaper.webp")
@@ -118,7 +159,7 @@ PageBase {
 
         StyledText {
             Layout.topMargin: Tokens.spacing.large
-            text: Tr.tr("Local wallpapers")
+            text: root.isAnimatedMode ? Tr.tr("Animated wallpapers") : Tr.tr("Local wallpapers")
             font: Tokens.font.title.small
         }
 
@@ -134,7 +175,14 @@ PageBase {
                 id: localWalls
 
                 model: {
-                    const walls = Wallpapers.list;
+                    const walls = root.isAnimatedMode ? Wallpapers.animatedList : Wallpapers.staticList;
+                    if (root.flatAnimatedDir) {
+                        const flat = [...walls].sort((a, b) => a.name.localeCompare(b.name));
+                        while (flat.length < Config.nexus.wallpapersPerRow)
+                            flat.push(null);
+                        return flat;
+                    }
+
                     const baseDir = Paths.wallsdir;
                     const categories = {};
                     const list = [];
@@ -149,8 +197,10 @@ PageBase {
                     }
                     list.push(...Object.values(categories));
                     list.sort((a, b) => ((a.parentDir === baseDir) - (b.parentDir === baseDir)) || a.name.localeCompare(b.name));
-                    while (list.length < Config.nexus.wallpapersPerRow)
-                        list.push(null);
+                    if (list.length > 0) {
+                        while (list.length < Config.nexus.wallpapersPerRow)
+                            list.push(null);
+                    }
                     return list;
                 }
 
@@ -166,14 +216,14 @@ PageBase {
                         if (!modelData)
                             return "";
 
-                        if (modelData.parentDir !== Paths.wallsdir) {
+                        if (!root.flatAnimatedDir && modelData.parentDir !== Paths.wallsdir) {
                             const category = Wallpapers.getCategoryFor(modelData);
                             return category.slice(0, 1).toUpperCase() + category.slice(1);
                         }
                         return modelData.name;
                     }
                     onClicked: {
-                        if (modelData.parentDir !== Paths.wallsdir) {
+                        if (!root.flatAnimatedDir && modelData.parentDir !== Paths.wallsdir) {
                             root.nState.selectedWallpaperCategory = Wallpapers.getCategoryFor(modelData);
                             root.nState.openSubPage(2); // Category page
                         } else {
@@ -205,16 +255,24 @@ PageBase {
 
                     MaterialIcon {
                         Layout.alignment: Qt.AlignHCenter
-                        text: "hide_image"
+                        text: root.isAnimatedMode ? "movie" : "hide_image"
                         color: Colours.palette.m3outline
                         fontStyle: Tokens.font.icon.extraLarge
                     }
 
                     StyledText {
                         Layout.alignment: Qt.AlignHCenter
-                        text: Tr.tr("No local wallpapers found")
+                        text: root.isAnimatedMode ? Tr.tr("No animated wallpapers found") : Tr.tr("No local wallpapers found")
                         color: Colours.palette.m3outline
                         font: Tokens.font.title.small
+                    }
+
+                    StyledText {
+                        Layout.alignment: Qt.AlignHCenter
+                        visible: root.isAnimatedMode
+                        text: Tr.tr("Put video wallpapers (.mp4, .webm, .mkv) in %1").arg(Paths.shortenHome(`${Paths.wallsdir}/Animated`))
+                        color: Colours.palette.m3outline
+                        font: Tokens.font.body.small
                     }
                 }
             }

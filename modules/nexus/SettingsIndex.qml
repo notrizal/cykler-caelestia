@@ -39,6 +39,50 @@ QtObject {
             page: "wallpaper",
             path: [],
             title: Tr.tr("Wallpaper & style"),
+            section: Tr.tr("Animated wallpapers"),
+            label: Tr.tr("Video hardware decoder"),
+            subtext: Tr.tr("Decoder backend for animated wallpapers; restart the shell after changing"),
+            keywords: "video hardware decoder vaapi vulkan cuda vdpau drm ffmpeg"
+        },
+        {
+            page: "wallpaper",
+            path: [],
+            title: Tr.tr("Wallpaper & style"),
+            section: Tr.tr("Animated wallpapers"),
+            label: Tr.tr("Restart shell to apply decoder"),
+            subtext: Tr.tr("Reloads the shell and reopens this page")
+        },
+        {
+            page: "wallpaper",
+            path: [],
+            title: Tr.tr("Wallpaper & style"),
+            section: Tr.tr("Animated wallpapers"),
+            label: Tr.tr("Pause animated wallpapers on battery"),
+            subtext: Tr.tr("Freeze video playback while unplugged to save power"),
+            keywords: "animated wallpaper battery pause power"
+        },
+        {
+            page: "wallpaper",
+            path: [],
+            title: Tr.tr("Wallpaper & style"),
+            section: Tr.tr("Animated wallpapers"),
+            label: Tr.tr("Pause animated wallpapers behind windows"),
+            subtext: Tr.tr("Freeze video playback when fullscreen, covered by 2+ windows, or ≥70% covered"),
+            keywords: "animated wallpaper pause windows fullscreen overlap"
+        },
+        {
+            page: "wallpaper",
+            path: [],
+            title: Tr.tr("Wallpaper & style"),
+            section: Tr.tr("Animated wallpapers"),
+            label: Tr.tr("Sync ASUS keyboard RGB"),
+            subtext: Tr.tr("Match keyboard backlight to the theme primary colour when asusctl is installed"),
+            keywords: "asus asusctl keyboard rgb backlight aura sync"
+        },
+        {
+            page: "wallpaper",
+            path: [],
+            title: Tr.tr("Wallpaper & style"),
             section: Tr.tr("Windows"),
             label: Tr.tr("Window corner radius"),
             subtext: Tr.tr("Radius of every window's corners, in pixels; the border around the desktop follows it"),

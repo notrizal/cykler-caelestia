@@ -87,7 +87,7 @@ Item {
             bgColour: Qt.alpha(Colours.palette.m3outlineVariant, 0.6)
 
             RotationAnimator on rotation {
-                running: !root.known && PowerSaving.animations
+                running: root.visible && !root.known && PowerSaving.animations
                 loops: Animation.Infinite
                 from: 0
                 to: 360

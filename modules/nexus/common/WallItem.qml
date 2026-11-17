@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
 import Caelestia.Config
 import Caelestia.Multimedia
 import qs.components
@@ -11,11 +12,15 @@ import qs.services
 Item {
     id: root
 
-    property alias source: img.source
+    property string source
     property alias text: label.text
     property alias radius: imgWrapper.radius
     property alias imgHeight: imgWrapper.implicitHeight
     property bool fillLabel: true
+
+    readonly property bool isVideo: Wallpapers.isVideo(source)
+    readonly property string videoThumbSource: isVideo ? Wallpapers.getWallpaperThumb(source, Wallpapers.thumbBusterFor(source)) : ""
+    readonly property bool imageReady: isVideo ? videoThumb.status === Image.Ready : img.ready
 
     signal clicked
 
@@ -39,7 +44,7 @@ Item {
             Loader {
                 anchors.centerIn: parent
 
-                opacity: img.ready ? 0 : 1
+                opacity: root.imageReady ? 0 : 1
                 active: opacity > 0
 
                 sourceComponent: StyledRect {
@@ -69,7 +74,52 @@ Item {
                 id: img
 
                 anchors.fill: parent
-                playing: stateLayer.containsMouse
+                source: root.isVideo ? "" : root.source
+                playing: false
+                visible: !root.isVideo
+            }
+
+            // Videos render a cached JPEG thumbnail here instead of spawning a QMediaPlayer per grid cell
+            Image {
+                id: videoThumb
+
+                anchors.fill: parent
+                visible: root.isVideo
+                asynchronous: true
+                fillMode: Image.PreserveAspectCrop
+                retainWhileLoading: true
+                source: root.videoThumbSource
+                sourceSize: {
+                    const dpr = (QsWindow.window as QsWindow)?.devicePixelRatio ?? 1;
+                    return Qt.size(Math.max(1, width * dpr), Math.max(1, height * dpr));
+                }
+                opacity: status === Image.Ready ? 1 : 0
+
+                Behavior on opacity {
+                    Anim {
+                        type: Anim.DefaultEffects
+                    }
+                }
+            }
+
+            StyledRect {
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.margins: Tokens.padding.small
+                visible: root.isVideo
+                implicitWidth: videoBadgeIcon.implicitWidth + Tokens.padding.small
+                implicitHeight: videoBadgeIcon.implicitHeight + Tokens.padding.extraSmall
+                radius: Tokens.rounding.small
+                color: Qt.alpha(Colours.palette.m3surfaceContainerHigh, 0.85)
+
+                MaterialIcon {
+                    id: videoBadgeIcon
+
+                    anchors.centerIn: parent
+                    text: "movie"
+                    color: Colours.palette.m3onSurface
+                    fontStyle: Tokens.font.icon.small
+                }
             }
         }
 

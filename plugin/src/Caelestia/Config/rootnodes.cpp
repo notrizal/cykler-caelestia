@@ -1,5 +1,7 @@
 #include "rootnodes.hpp"
 
+#include <qtenvironmentvariables.h>
+
 #include "core/toaster.hpp"
 #include "util/i18n.hpp"
 #include "common.hpp"
@@ -13,11 +15,46 @@ namespace detail {
 using util::i18n::mark;
 using util::i18n::markN;
 
+void applyVideoHwDecoderEnv(VideoHwDecoder::Enum decoder) {
+    static bool appliedOnce = false;
+    if (appliedOnce)
+        return;
+    appliedOnce = true;
+
+    const char* value = nullptr;
+    switch (decoder) {
+    case VideoHwDecoder::Auto:
+        return;
+    case VideoHwDecoder::None:
+        value = "none";
+        break;
+    case VideoHwDecoder::Vaapi:
+        value = "vaapi";
+        break;
+    case VideoHwDecoder::Vdpau:
+        value = "vdpau";
+        break;
+    case VideoHwDecoder::Cuda:
+        value = "cuda";
+        break;
+    case VideoHwDecoder::Vulkan:
+        value = "vulkan";
+        break;
+    case VideoHwDecoder::Drm:
+        value = "drm";
+        break;
+    }
+
+    if (value)
+        qputenv("QT_FFMPEG_DECODING_HW_DEVICE_TYPES", value);
+}
+
 void loaded(ConfigKind kind, settings::RootNode* layer, const QString& screen) {
     if (kind != ConfigKind::Shell || !screen.isEmpty())
         return;
 
     const auto* config = static_cast<ConfigRoot*>(layer);
+    applyVideoHwDecoderEnv(config->background()->videoHwDecoder());
     if (!config->utilities()->toasts()->configLoaded())
         return;
 
