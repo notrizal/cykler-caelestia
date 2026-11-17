@@ -4,6 +4,7 @@ import Caelestia.Config
 import qs.components
 import qs.modules.bar as Bar
 import qs.modules.dashboard as Dashboard
+import qs.modules.dock as Dock
 import qs.modules.launcher as Launcher
 import qs.modules.notch as Notch
 import qs.modules.notifications as Notifications
@@ -21,6 +22,7 @@ Item {
     required property ScreenState screenState
     required property Bar.BarWrapper bar
     required property real borderThickness
+    required property bool fullscreen
 
     readonly property alias osd: osd
     readonly property alias osdWrapper: osdWrapper
@@ -29,6 +31,7 @@ Item {
     readonly property alias sessionWrapper: sessionWrapper
     readonly property alias launcher: launcher
     readonly property alias dashboard: dashboard
+    readonly property alias dock: dock
     readonly property alias notch: notch
     readonly property alias popouts: popoutsWrapper.content
     readonly property alias popoutsWrapper: popoutsWrapper
@@ -155,6 +158,15 @@ Item {
 
         screen: root.screen
         screenState: root.screenState
+    }
+
+    Dock.Wrapper {
+        id: dock
+
+        screen: root.screen
+        screenState: root.screenState
+        bar: root.bar
+        fullscreen: root.fullscreen
     }
 
     Notch.Wrapper {

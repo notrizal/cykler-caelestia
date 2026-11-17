@@ -46,6 +46,8 @@ ENUM(TodoClearAfter, Never, FiveMinutes, OneDay, SevenDays, EndOfWeek)
 ENUM(PerfGraphColours, Scheme, Vibrant, Monochrome, Custom)
 // Hardware decoder backend for video wallpapers (QT_FFMPEG_DECODING_HW_DEVICE_TYPES)
 ENUM(VideoHwDecoder, Auto, None, Vaapi, Vdpau, Cuda, Vulkan, Drm)
+ENUM(DockVisibility, AlwaysShow, Floating, AutoHide, DodgeWindows)
+ENUM(DockHoverEffect, Magnification, Highlight)
 ENUM(WallpaperTransition,
     // clang-format off
     ChromaticBloom,

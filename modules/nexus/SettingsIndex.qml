@@ -209,6 +209,13 @@ QtObject {
             path: [],
             title: Tr.tr("Panels"),
             section: Tr.tr("Bar & panels"),
+            label: Tr.tr("Dock")
+        },
+        {
+            page: "panels",
+            path: [],
+            title: Tr.tr("Panels"),
+            section: Tr.tr("Bar & panels"),
             label: Tr.tr("Dashboard")
         },
         {
@@ -1607,6 +1614,88 @@ QtObject {
         },
 
         {
+            page: "panels",
+            path: [24],
+            title: Tr.tr("Dock"),
+            section: Tr.tr("General"),
+            label: Tr.tr("Enabled"),
+            subtext: Tr.tr("A bottom dock for pinned apps and running windows with live hover previews"),
+            keywords: "dock bottom panel taskbar apps enable"
+        },
+        {
+            page: "panels",
+            path: [24],
+            title: Tr.tr("Dock"),
+            section: Tr.tr("General"),
+            label: Tr.tr("Visibility"),
+            subtext: Tr.tr("Choose whether the dock reserves space, floats, auto-hides, or dodges windows"),
+            keywords: "dock visibility autohide floating always show dodge windows"
+        },
+        {
+            page: "panels",
+            path: [24],
+            title: Tr.tr("Dock"),
+            section: Tr.tr("General"),
+            label: Tr.tr("Hover effect"),
+            subtext: Tr.tr("Visual style when moving the pointer over dock icons"),
+            keywords: "dock hover effect magnification highlight zoom scale"
+        },
+        {
+            page: "panels",
+            path: [24],
+            title: Tr.tr("Dock"),
+            section: Tr.tr("General"),
+            label: Tr.tr("Only show windows from this monitor"),
+            subtext: Tr.tr("When off, running apps from every monitor and workspace appear on the dock"),
+            keywords: "dock per monitor windows workspace filter"
+        },
+        {
+            page: "panels",
+            path: [24],
+            title: Tr.tr("Dock"),
+            section: Tr.tr("Sizing & timing"),
+            label: Tr.tr("Icon size"),
+            subtext: Tr.tr("Size of each application icon on the dock, in pixels"),
+            keywords: "dock icon size px"
+        },
+        {
+            page: "panels",
+            path: [24],
+            title: Tr.tr("Dock"),
+            section: Tr.tr("Sizing & timing"),
+            label: Tr.tr("Preview delay"),
+            subtext: Tr.tr("Milliseconds before the live window preview opens on hover"),
+            keywords: "dock preview hover delay ms"
+        },
+        {
+            page: "panels",
+            path: [24],
+            title: Tr.tr("Dock"),
+            section: Tr.tr("Sizing & timing"),
+            label: Tr.tr("Auto-hide delay"),
+            subtext: Tr.tr("Milliseconds before an auto-hidden or occluded dock slides back down"),
+            keywords: "dock autohide delay ms"
+        },
+        {
+            page: "panels",
+            path: [24],
+            title: Tr.tr("Dock"),
+            section: Tr.tr("Monitors"),
+            label: Tr.tr("Dock monitors"),
+            subtext: Tr.tr("Choose which screens show the dock"),
+            keywords: "dock monitor screen display output"
+        },
+        {
+            page: "panels",
+            path: [24],
+            title: Tr.tr("Dock"),
+            section: Tr.tr("Pinned applications"),
+            label: Tr.tr("Pinned dock apps"),
+            subtext: Tr.tr("Pin or reorder favourite apps on the dock"),
+            keywords: "dock pin apps applications launcher"
+        },
+
+        {
             page: "layout",
             path: [],
             title: Tr.tr("Layout"),
@@ -1643,7 +1732,7 @@ QtObject {
             path: [],
             title: Tr.tr("Apps"),
             section: Tr.tr("Default applications"),
-            label: Tr.trCtx("Web browser", "default app category")
+            label: Tr.tr("Web browser")
         },
         {
             page: "apps",
@@ -2708,6 +2797,38 @@ QtObject {
             section: Tr.tr("Repository"),
             label: Tr.tr("Branch"),
             keywords: "git channel version update"
+        },
+
+        {
+            page: "plugins",
+            path: [],
+            title: Tr.tr("Plugins"),
+            section: Tr.tr("Background daemon fix"),
+            label: Tr.tr("Shell priority"),
+            subtext: Tr.tr("What the running shell is scheduled at now")
+        },
+        {
+            page: "plugins",
+            path: [],
+            title: Tr.tr("Plugins"),
+            section: Tr.tr("Background daemon fix"),
+            label: Tr.tr("Rule file"),
+            subtext: Tr.tr("/etc/ananicy.d/99-cykler-caelestia.rules")
+        },
+        {
+            page: "plugins",
+            path: [],
+            title: Tr.tr("Plugins"),
+            section: Tr.tr("Background daemon fix"),
+            label: Tr.tr("Scheduler"),
+            subtext: Tr.tr("The daemon that applies the rule")
+        },
+        {
+            page: "plugins",
+            path: [],
+            title: Tr.tr("Plugins"),
+            section: Tr.tr("Background daemon fix"),
+            label: Tr.tr("Conflicting rule")
         },
 
         {

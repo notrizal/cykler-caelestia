@@ -44,7 +44,7 @@ PAGES: dict[str, list[str]] = {
         "UtilitiesPanel", "BarWorkspaces", "BarActiveWindow", "BarTray", "BarStatusIcons",
         "BarClock", "NotchPanel", "OverviewPanel", "DesktopPanel", "LockPanel", "BarLayout",
         "SessionPanel", "LockWidgetsPanel", "WidgetsPanel", "AddWidgetPanel", "DashWidgetsPanel",
-        "StocksPanel", "ProgressPanel",
+        "StocksPanel", "ProgressPanel", "SystemPanel", "DockPanel",
     ],
     "layout": ["LayoutPage"],
     "apps": ["AppsPage", "AllApps", "AppInfo"],
@@ -137,6 +137,15 @@ MANUAL_ENTRIES: dict[str, list[tuple[str, str, str, str]]] = {
     ],
     "SavedNetworksPage": [
         ("", "Saved networks", "Wi-Fi networks already stored, and forgetting them", "wifi known forget stored"),
+    ],
+    "DockPanel": [
+        ("Monitors", "Dock monitors", "Choose which screens show the dock", "dock monitor screen display output"),
+        ("Pinned applications", "Pinned dock apps", "Pin or reorder favourite apps on the dock", "dock pin apps applications launcher"),
+    ],
+    "SystemPanel": [
+        ("Rings", "Rings readings", "Which readings the system card shows in this style", "cpu ram memory disk temperature gpu metrics performance resources ring"),
+        ("Bars", "Bars readings", "Which readings the system card shows in this style", "cpu ram memory disk temperature gpu metrics performance resources bar"),
+        ("Line graph", "Line graph readings", "Which readings the system card shows in this style", "cpu ram memory disk temperature gpu metrics performance resources line"),
     ],
 }
 

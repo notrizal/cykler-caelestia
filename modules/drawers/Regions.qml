@@ -31,6 +31,36 @@ Region {
     }
 
     R {
+        panel: root.panels.dock
+        y: root.win.height - height
+        height: panel.height * (1 - root.panels.dock.offsetScale) + root.bar.insetBottom
+    }
+
+    Region {
+        readonly property Item d: root.panels.dock
+        readonly property Item p: d.previewItem
+        readonly property bool open: d.previewOpen
+
+        x: root.bar.insetLeft + d.x + p.x
+        y: root.bar.insetTop + d.y + p.y
+        width: open ? p.width : 0
+        height: open ? (p.height + d.previewGap) : 0
+        intersection: Intersection.Subtract
+    }
+
+    Region {
+        readonly property Item d: root.panels.dock
+        readonly property Item m: d.menuItem
+        readonly property bool open: d.menuOpen
+
+        x: root.bar.insetLeft + d.x + m.x
+        y: root.bar.insetTop + d.y + m.y
+        width: open ? m.width : 0
+        height: open ? (m.height + d.previewGap) : 0
+        intersection: Intersection.Subtract
+    }
+
+    R {
         id: sessionRegion
 
         panel: root.panels.sessionWrapper

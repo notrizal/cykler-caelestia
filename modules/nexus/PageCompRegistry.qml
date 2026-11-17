@@ -153,6 +153,11 @@ QtObject {
                 Component {
                     SystemPanel {}
                 }
+
+                // Bottom application dock sub-page
+                Component {
+                    DockPanel {}
+                }
             }
         },
         Component {

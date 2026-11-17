@@ -50,6 +50,13 @@ PageBase {
         }
 
         NavRow {
+            icon: "view_carousel"
+            text: Tr.tr("Dock")
+            subtext: Config.dock.enabled ? Tr.trCtx("Enabled", "panel status") : Tr.trCtx("Disabled", "panel status")
+            onClicked: root.nState.openSubPage(24)
+        }
+
+        NavRow {
             icon: "dashboard"
             text: Tr.tr("Dashboard")
             subtext: Config.dashboard.enabled ? Tr.trCtx("Enabled", "panel status") : Tr.trCtx("Disabled", "panel status")

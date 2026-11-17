@@ -11,6 +11,7 @@ Scope {
 
     required property ShellScreen screen
     required property Bar.BarWrapper bar
+    required property var dock
 
     // The bar's zone replaces the plain border zone on whichever edge it is attached to
     ExclusionZone {
@@ -30,7 +31,10 @@ Scope {
 
     ExclusionZone {
         anchors.bottom: true
-        exclusiveZone: root.bar.onBottom ? root.bar.exclusiveZone : contentItem.Config.border.thickness
+        exclusiveZone: {
+            const base = root.bar.onBottom ? root.bar.exclusiveZone : contentItem.Config.border.thickness;
+            return root.dock.reserveSpace ? base + root.dock.implicitHeight : base;
+        }
     }
 
     component ExclusionZone: StyledWindow {

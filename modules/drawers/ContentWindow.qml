@@ -17,6 +17,7 @@ StyledWindow {
     id: root
 
     readonly property alias bar: bar
+    readonly property alias dock: panels.dock
     readonly property alias interactionWrapper: interactions
 
     readonly property ScreenState screenState: ShellState.forScreen(screen)
@@ -43,6 +44,8 @@ StyledWindow {
     // Vertical offset for a panel hanging from the top or bottom edge: while the bar's middle is cut away the
     // frame is thinner there, so a panel sitting in that stretch moves back towards the screen edge to stay
     // attached to it. A panel over one of the bar's ends (or overlapping them) stays where it is.
+
+    readonly property real dockShift: shiftFor(panels.dock, false)
 
     function shiftFor(panel: Item, atTop: bool): real {
         if (!(atTop ? bar.onTop : bar.onBottom))
@@ -94,6 +97,7 @@ StyledWindow {
         screenState.session = false;
         screenState.dashboard = false;
         panels.popouts.close();
+        panels.dock.closeAllPopups();
     }
 
     name: "drawers"
@@ -175,6 +179,8 @@ StyledWindow {
                 return true;
             if (panels.popouts.currentName.startsWith("traymenu") && (panels.popouts.current as StackView)?.depth > 1)
                 return true;
+            if (panels.dock.menuOpen || panels.dock.pinnedPreviewOpen)
+                return true;
             return false;
         }
         windows: [root]
@@ -184,6 +190,7 @@ StyledWindow {
             root.screenState.sidebar = false;
             root.screenState.dashboard = false;
             panels.popouts.hasCurrent = false;
+            panels.dock.closeAllPopups();
             bar.closeTray();
         }
     }
@@ -259,6 +266,14 @@ StyledWindow {
             panel: panels.dashboard
             deformAmount: 0.1
             y: panels.dashboard.y + bar.insetTop + root.dashboardShift
+        }
+
+        PanelBg {
+            id: dockBg
+
+            panel: panels.dock
+            deformAmount: 0.1
+            y: panels.dock.y + bar.insetTop + root.dockShift
         }
 
         PanelBg {
@@ -413,9 +428,19 @@ StyledWindow {
             screenState: root.screenState
             bar: bar
             borderThickness: root.borderThickness
+            fullscreen: root.hasFullscreen
 
             utilities.horizontalStretch: (sidebarBg.rawDeformMatrix.m11 - 1) / 2 + 1
             utilities.deformMatrix: utilsBg.rawDeformMatrix
+
+            dock.transform: [
+                Matrix4x4 {
+                    matrix: dockBg.deformMatrix
+                },
+                Translate {
+                    y: root.dockShift
+                }
+            ]
 
             dashboard.transform: [
                 Matrix4x4 {

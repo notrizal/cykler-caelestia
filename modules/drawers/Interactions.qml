@@ -326,6 +326,8 @@ CustomMouseArea {
             if (!utilitiesShortcutActive)
                 screenState.utilities = false;
 
+            panels.dock.edgeHovered = false;
+
             if (!popouts.currentName.startsWith("traymenu") || ((popouts.current as StackView)?.depth ?? 0) <= 1) {
                 popouts.hasCurrent = false;
                 bar.closeTray();
@@ -489,6 +491,17 @@ CustomMouseArea {
                 screenState.dashboard = true;
             else if (dashboardDrag < -Config.dashboard.dragThreshold)
                 screenState.dashboard = false;
+        }
+
+        // Show dock on bottom-edge hover when auto-hidden or occluded
+        const dockPanel = panels.dock;
+        const dockW = Math.max(200, dockPanel.width);
+        const atDockEdge = Config.dock.enabled && y >= height - Math.max(Config.border.minThickness, bar.insetBottom + 2) && Math.abs(x - width / 2) <= dockW / 2;
+        if (atDockEdge) {
+            dockPanel.edgeHovered = true;
+            dockPanel.pokeEdge();
+        } else {
+            dockPanel.edgeHovered = false;
         }
 
         // Show utilities on hover. Not while a full-height sidebar is covering the space they would open in
