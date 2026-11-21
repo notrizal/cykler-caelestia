@@ -214,8 +214,8 @@ Item {
             anchors.margins: Tokens.padding.medium
 
             horizontalAlignment: Text.AlignHCenter
-            elide: item.GridView.isCurrentItem ? Text.ElideNone : Text.ElideRight
-            wrapMode: item.GridView.isCurrentItem ? Text.WrapAtWordBoundaryOrAnywhere : Text.NoWrap
+            elide: Text.ElideRight
+            wrapMode: Text.NoWrap
 
             Component.onCompleted: text = item.modelData.name
         }

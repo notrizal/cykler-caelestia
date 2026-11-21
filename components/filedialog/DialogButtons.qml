@@ -1,3 +1,4 @@
+import QtQuick
 import QtQuick.Layouts
 import Caelestia.Config
 import Caelestia.I18n
@@ -23,20 +24,27 @@ StyledRect {
         spacing: Tokens.spacing.small
 
         StyledText {
+            Layout.alignment: Qt.AlignVCenter
             text: Tr.trCtx("Filter:", "file filter")
         }
 
         StyledRect {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.minimumWidth: 0
             Layout.rightMargin: Tokens.spacing.medium
 
+            clip: true
             color: Colours.tPalette.m3surfaceContainerHigh
             radius: Tokens.rounding.medium
 
             StyledText {
                 anchors.fill: parent
-                anchors.margins: Tokens.padding.medium
+                anchors.leftMargin: Tokens.padding.medium
+                anchors.rightMargin: Tokens.padding.medium
+
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
 
                 text: {
                     const filters = root.dialog.filters.map(f => `*.${f}`).join(Tr.trCtx(", ", "file filter separator"));
@@ -50,8 +58,8 @@ StyledRect {
             color: Colours.tPalette.m3surfaceContainerHigh
             radius: Tokens.rounding.medium
 
-            implicitWidth: cancelText.implicitWidth + Tokens.padding.medium * 2
-            implicitHeight: cancelText.implicitHeight + Tokens.padding.medium * 2
+            implicitWidth: Math.max(selectText.implicitWidth, cancelText.implicitWidth) + Tokens.padding.medium * 2
+            implicitHeight: Math.max(selectText.implicitHeight, cancelText.implicitHeight) + Tokens.padding.medium * 2
 
             StateLayer {
                 disabled: !root.dialog.selectionValid
@@ -73,8 +81,8 @@ StyledRect {
             color: Colours.tPalette.m3surfaceContainerHigh
             radius: Tokens.rounding.medium
 
-            implicitWidth: cancelText.implicitWidth + Tokens.padding.medium * 2
-            implicitHeight: cancelText.implicitHeight + Tokens.padding.medium * 2
+            implicitWidth: Math.max(selectText.implicitWidth, cancelText.implicitWidth) + Tokens.padding.medium * 2
+            implicitHeight: Math.max(selectText.implicitHeight, cancelText.implicitHeight) + Tokens.padding.medium * 2
 
             StateLayer {
                 onClicked: {

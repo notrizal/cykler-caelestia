@@ -34,10 +34,14 @@ MouseArea {
     readonly property bool preferAbove: thisSideY === Menu.Bottom
     readonly property real itemTopY: {
         watcher.transform;
+        if (!attachTo || !parent)
+            return 0;
         return attachTo.mapToItem(parent, 0, 0).y;
     }
     readonly property real itemBottomY: {
         watcher.transform;
+        if (!attachTo || !parent)
+            return 0;
         return attachTo.mapToItem(parent, 0, attachTo.height).y;
     }
     readonly property real spaceAbove: itemTopY
@@ -56,9 +60,11 @@ MouseArea {
     signal itemSelected(item: MenuItem)
 
     parent: {
-        const win = QsWindow.window;
+        // Resolve the window from attachTo so re-parenting never detaches the menu from
+        // its visual hierarchy while a page is still being pushed onto a StackView.
+        const win = root.attachTo ? root.attachTo.QsWindow.window : QsWindow.window;
         if (!win)
-            return null;
+            return root.attachTo;
         const contentWin = win as ContentWindow; // If inside the drawer content window, put it inside the interaction wrapper so hover works
         return contentWin ? contentWin.interactionWrapper : (win as QsWindow).contentItem;
     }
@@ -91,6 +97,8 @@ MouseArea {
         x: {
             CUtils.dependency(watcher.transform); // mapToItem is not reactive so this forces updates
             const item = root.attachTo;
+            if (!item || !root.parent)
+                return 0;
             let off = root.attachSideX === Menu.Left ? 0 : item.width;
             if (root.thisSideX === Menu.Right)
                 off -= width;
@@ -100,6 +108,8 @@ MouseArea {
         y: {
             CUtils.dependency(watcher.transform); // mapToItem is not reactive so this forces updates
             const item = root.attachTo;
+            if (!item || !root.parent)
+                return 0;
             let off = root.effectiveAbove ? 0 : item.height;
             if (root.effectiveAbove)
                 off -= height;
@@ -107,8 +117,8 @@ MouseArea {
             return Math.max(root.screenMargin, Math.min(root.parent.height - height - root.screenMargin, preferred));
         }
 
-        width: Math.min(implicitWidth, root.parent.width - root.screenMargin * 2)
-        height: Math.min(implicitHeight, root.parent.height - root.screenMargin * 2)
+        width: root.parent ? Math.min(implicitWidth, root.parent.width - root.screenMargin * 2) : implicitWidth
+        height: root.parent ? Math.min(implicitHeight, root.parent.height - root.screenMargin * 2) : implicitHeight
         implicitWidth: Math.max(root.compact ? 0 : 200, column.implicitWidth + column.anchors.margins * 2)
         implicitHeight: column.implicitHeight + column.anchors.margins * 2
 

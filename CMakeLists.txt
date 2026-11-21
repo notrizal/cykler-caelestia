@@ -79,6 +79,7 @@ if("shell" IN_LIST ENABLE_MODULES)
     install(PROGRAMS scripts/caelestia-process-monitor.py DESTINATION "${INSTALL_QSCONFDIR}/scripts")
     install(PROGRAMS scripts/caelestia-extract-videothumbs.py DESTINATION "${INSTALL_QSCONFDIR}/scripts")
 
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/shell.qml")
     file(READ shell.qml SHELL_QML)
     string(REPLACE "settings.watchFiles: true" "settings.watchFiles: false" SHELL_QML "${SHELL_QML}")
     file(WRITE "${CMAKE_BINARY_DIR}/qml/shell.qml" "${SHELL_QML}")
