@@ -12,6 +12,50 @@ Scope {
 
     property bool launcherInterrupted
     readonly property bool hasFullscreen: Hypr.focusedWorkspace?.toplevels.values.some(t => t.lastIpcObject.fullscreen > 1) ?? false
+    property var altTabScreenState: null
+
+    function stopAltTabTimers(): void {
+        altTabHoldDelay.stop();
+        altTabRepeatTimer.stop();
+    }
+
+    function stepAltTab(): void {
+        const s = root.altTabScreenState;
+        if (!s || !s.overview || !s.overviewAltTabActive) {
+            root.stopAltTabTimers();
+            return;
+        }
+        s.overviewCycleRequested();
+    }
+
+    function commitAltTab(): void {
+        root.stopAltTabTimers();
+        const s = root.altTabScreenState ?? ShellState.forActive();
+        root.altTabScreenState = null;
+        if (!s || !s.overview || !s.overviewAltTabActive)
+            return;
+        s.overviewAltTabActive = false;
+        s.overviewCommitRequested();
+    }
+
+    Timer {
+        id: altTabHoldDelay
+
+        interval: 240
+        repeat: false
+        onTriggered: {
+            root.stepAltTab();
+            altTabRepeatTimer.restart();
+        }
+    }
+
+    Timer {
+        id: altTabRepeatTimer
+
+        interval: 85
+        repeat: true
+        onTriggered: root.stepAltTab()
+    }
 
     // qmllint disable unresolved-type
     CustomShortcut {
@@ -19,6 +63,27 @@ Scope {
         name: "displayProject"
         description: "Cycle display projection mode"
         onPressed: ShellState.forActive()?.displayProjectRequested()
+    }
+
+    // qmllint disable unresolved-type
+    CustomShortcut {
+        // qmllint enable unresolved-type
+        name: "clipboard"
+        description: "Open clipboard history in launcher"
+        onPressed: {
+            if (root.hasFullscreen)
+                return;
+            const s = ShellState.forActive();
+            if (!s)
+                return;
+            const clipPrefix = `${GlobalConfig.launcher.actionPrefix}clip `;
+            if (s.launcher && s.launcherSearchRequest === "") {
+                s.launcher = false;
+                return;
+            }
+            s.launcherSearchRequest = clipPrefix;
+            s.launcher = true;
+        }
     }
 
     // qmllint disable unresolved-type
@@ -194,6 +259,38 @@ Scope {
                 return;
             screenState.overview = !screenState.overview;
         }
+    }
+
+    // qmllint disable unresolved-type
+    CustomShortcut {
+        // qmllint enable unresolved-type
+        name: "overviewAltTab"
+        description: "Open overview and cycle workspaces while holding Alt"
+        onPressed: {
+            const screenState = ShellState.forActive();
+            if (!screenState || (!screenState.overview && root.hasFullscreen))
+                return;
+            root.altTabScreenState = screenState;
+            if (!screenState.overview) {
+                screenState.overviewAltTabActive = true;
+                screenState.overview = true;
+            } else {
+                screenState.overviewAltTabActive = true;
+                screenState.overviewCycleRequested();
+            }
+            altTabRepeatTimer.stop();
+            altTabHoldDelay.restart();
+        }
+        onReleased: root.stopAltTabTimers()
+    }
+
+    // qmllint disable unresolved-type
+    CustomShortcut {
+        // qmllint enable unresolved-type
+        name: "overviewAltRelease"
+        description: "Confirm overview Alt+Tab selection on Alt release"
+        onPressed: root.commitAltTab()
+        onReleased: root.commitAltTab()
     }
 
     // qmllint disable unresolved-type

@@ -133,7 +133,29 @@ Item {
     readonly property real gridHeight: root.cardHeight * root.rows + root.gap * (root.rows - 1)
 
     function close(): void {
-        root.screenState.overview = false;
+        if (root.screenState) {
+            root.screenState.overviewAltTabActive = false;
+            root.screenState.overview = false;
+        }
+    }
+
+    // Cycles selection forward within the currently visible 10-workspace page
+    // (e.g. 1..10 wraps to 1, 11..20 wraps to 11) without crossing into another page
+    function cycleInPage(): void {
+        const pageTiles = root.pageIds;
+        if (pageTiles.length === 0)
+            return;
+
+        const pos = pageTiles.indexOf(root.selectedId);
+        const nextPos = pos >= 0 ? (pos + 1) % pageTiles.length : 0;
+        root.selectedId = pageTiles[nextPos];
+    }
+
+    function commitAltTab(): void {
+        if (!root.screenState?.overview)
+            return;
+        root.screenState.overviewAltTabActive = false;
+        root.jumpTo(root.selectedId);
     }
 
     // Selects the workspace at this position in the whole list (clamped to it) and turns to its page
@@ -284,6 +306,13 @@ Item {
         root.pending = null;
     }
 
+    Keys.onReleased: event => {
+        if ((event.key === Qt.Key_Alt || event.key === Qt.Key_AltGr) && root.screenState?.overviewAltTabActive) {
+            event.accepted = true;
+            root.commitAltTab();
+        }
+    }
+
     // While it is up the previews are kept current, since a layout change (a swap, a resize
     // from elsewhere) sends no event of its own. Both calls matter: toplevels carries each
     // window's own geometry (what WindowCard draws), workspaces is what settles it after a
@@ -359,11 +388,21 @@ Item {
             if (root.screenState?.overview) {
                 root.resetSelection();
                 root.forceActiveFocus();
+            } else if (root.screenState) {
+                root.screenState.overviewAltTabActive = false;
             }
         }
 
         function onOverviewPageRequested(delta: int): void {
             root.setPage(root.page + delta);
+        }
+
+        function onOverviewCycleRequested(): void {
+            root.cycleInPage();
+        }
+
+        function onOverviewCommitRequested(): void {
+            root.commitAltTab();
         }
 
         target: root.screenState
@@ -375,6 +414,9 @@ Item {
         event.accepted = true;
 
         switch (event.key) {
+        case Qt.Key_Tab:
+            root.cycleInPage();
+            return;
         case Qt.Key_Left:
             root.moveSelection(-1, 0);
             return;

@@ -23,9 +23,22 @@ StyledWindow {
     readonly property ScreenState screenState: ShellState.forScreen(screen)
 
     readonly property HyprlandMonitor monitor: Hypr.monitorFor(screen)
+    readonly property HyprlandWorkspace activeWs: {
+        void Hypr.layoutRevision;
+        if (monitor?.activeWorkspace)
+            return monitor.activeWorkspace;
+        const wsId = monitor?.lastIpcObject?.activeWorkspace?.id ?? 0;
+        if (wsId > 0)
+            return Hypr.workspaces.values.find(w => w.id === wsId) ?? Hypr.focusedWorkspace;
+        return Hypr.focusedWorkspace;
+    }
     readonly property bool hasSpecialWorkspace: (monitor?.lastIpcObject.specialWorkspace?.name.length ?? 0) > 0
-    readonly property bool hasFullscreenOnNormalWs: monitor?.activeWorkspace?.toplevels.values.some(t => t.lastIpcObject.fullscreen > 1) ?? false
+    readonly property bool hasFullscreenOnNormalWs: {
+        void Hypr.layoutRevision;
+        return activeWs?.toplevels.values.some(t => t.lastIpcObject.fullscreen > 1) ?? false;
+    }
     readonly property bool hasFullscreen: {
+        void Hypr.layoutRevision;
         if (hasSpecialWorkspace) {
             const specialName = monitor?.lastIpcObject.specialWorkspace?.name;
             if (!specialName)
@@ -38,7 +51,10 @@ StyledWindow {
 
     // On an empty workspace the bar's middle stretch can be dropped so the wallpaper shows through
     // (config bar.hideMiddleOnDesktop). Floating windows don't count as covering the desktop.
-    readonly property bool desktopEmpty: monitor?.activeWorkspace?.toplevels?.values.every(t => t.lastIpcObject?.floating) ?? true
+    readonly property bool desktopEmpty: {
+        void Hypr.layoutRevision;
+        return activeWs?.toplevels?.values.every(t => t.lastIpcObject?.floating) ?? true;
+    }
     readonly property bool middleHidden: contentItem.Config.bar.hideMiddleOnDesktop && desktopEmpty && bar.hasMiddle && !hasFullscreen
     property real middleProg: middleHidden ? 1 : 0
     // Vertical offset for a panel hanging from the top or bottom edge: while the bar's middle is cut away the
@@ -46,6 +62,55 @@ StyledWindow {
     // attached to it. A panel over one of the bar's ends (or overlapping them) stays where it is.
 
     readonly property real dockShift: shiftFor(panels.dock, false)
+
+    // Matches the shell frame's corner radius to the live outer gap of tiled windows on this
+    // workspace (e.g. 10px for a single tiled window via w[tv1], 6px for 2+ tiled windows via
+    // general:gaps_out), keeping the frame corner concentric with the window corners.
+    readonly property real effectiveBorderGap: {
+        void Hypr.layoutRevision;
+        void DockService.revision;
+        const fallback = contentItem.Config.border.thickness;
+        const monIpc = monitor?.lastIpcObject;
+        const specialName = String(monIpc?.specialWorkspace?.name || "");
+        const ws = specialName ? Hypr.workspaces.values.find(w => w.name === specialName) : activeWs;
+        const toplevels = ws?.toplevels?.values;
+        if (!toplevels || toplevels.length === 0)
+            return fallback;
+
+        const reserved = monIpc?.reserved;
+        const monX = monIpc?.x ?? 0;
+        const monY = monIpc?.y ?? 0;
+        // Never let a stale startup reserved=[0,0,0,0] undercut the frame's own live bar/border insets.
+        const insetLeft = Math.max(bar.insetLeft, reserved && reserved.length >= 4 ? reserved[0] : 0);
+        const insetTop = Math.max(bar.insetTop, reserved && reserved.length >= 4 ? reserved[1] : 0);
+        const borderSize = Number(Hypr.options["general:border_size"] ?? 0);
+
+        let minGap = Infinity;
+        for (const t of toplevels) {
+            const ipc = t?.lastIpcObject;
+            if (!ipc || !ipc.mapped || ipc.floating || !ipc.at || ipc.at.length < 2)
+                continue;
+            const gapLeft = ipc.at[0] - (monX + insetLeft) - borderSize;
+            const gapTop = ipc.at[1] - (monY + insetTop) - borderSize;
+            if (gapLeft >= 0)
+                minGap = Math.min(minGap, gapLeft);
+            if (gapTop >= 0)
+                minGap = Math.min(minGap, gapTop);
+        }
+
+        if (!isFinite(minGap) || minGap > fallback * 3)
+            return fallback;
+        return Math.max(0, minGap);
+    }
+
+    readonly property real targetBorderRounding: {
+        if (GameMode.enabled && GlobalConfig.utilities.gameMode.options["decoration:rounding"] === 0)
+            return 0;
+        const baseWindowRounding = Math.max(0, contentItem.Config.border.rounding - contentItem.Config.border.thickness);
+        return baseWindowRounding + effectiveBorderGap;
+    }
+
+    property real borderRoundingBase: targetBorderRounding
 
     function shiftFor(panel: Item, atTop: bool): real {
         if (!(atTop ? bar.onTop : bar.onBottom))
@@ -70,7 +135,7 @@ StyledWindow {
 
     readonly property real borderThickness: contentItem.Config.border.thickness * (1 - fsTransitionProg)
 
-    readonly property real borderRounding: (GameMode.enabled && GlobalConfig.utilities.gameMode.options["decoration:rounding"] === 0 ? 0 : contentItem.Config.border.rounding) * (1 - fsTransitionProg)
+    readonly property real borderRounding: borderRoundingBase * (1 - fsTransitionProg)
 
     readonly property real shadowOpacity: 0.7 * (1 - fsTransitionProg)
 
@@ -122,6 +187,12 @@ StyledWindow {
 
     Behavior on fsTransitionProg {
         Anim {}
+    }
+
+    Behavior on borderRoundingBase {
+        Anim {
+            type: Anim.FastSpatial
+        }
     }
 
     // No overshoot here: the frame's thickness follows this, and a bouncy curve makes the blobs smooth the
@@ -324,14 +395,21 @@ StyledWindow {
             id: timerBg
 
             bubble: panels.notch.timerBubble
-            excludeCorners: [notchBg, stopwatchBg]
+            excludeCorners: [notchBg, stopwatchBg, focusBg]
         }
 
         BubbleBg {
             id: stopwatchBg
 
             bubble: panels.notch.stopwatchBubble
-            excludeCorners: [notchBg, timerBg]
+            excludeCorners: [notchBg, timerBg, focusBg]
+        }
+
+        BubbleBg {
+            id: focusBg
+
+            bubble: panels.notch.focusBubble
+            excludeCorners: [notchBg, timerBg, stopwatchBg]
         }
 
         PanelBg {

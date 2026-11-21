@@ -38,11 +38,29 @@ Singleton {
     readonly property alias devices: extras.devices
 
     property string lastSpecialWorkspace: ""
+    property int layoutRevision: 0
+    property int startupSyncStep: 0
 
     signal configReloaded
 
+    function syncAll(): void {
+        Hyprland.refreshMonitors();
+        Hyprland.refreshWorkspaces();
+        Hyprland.refreshToplevels();
+        layoutSettleTimer.restart();
+    }
+
     function dispatch(request: string): void {
         Hyprland.dispatch(request);
+    }
+
+    function sendShortcut(mods: string, key: string): void {
+        if (usingLua) {
+            dispatch(`hl.dsp.send_shortcut({ mods = "${mods}", key = "${key}" })`);
+        } else {
+            const plainMods = mods.replace(/\s*\+\s*/g, " ");
+            dispatch(`sendshortcut ${plainMods}, ${key}, activewindow`);
+        }
     }
 
     function focusWorkspace(ws: var): void {
@@ -174,7 +192,7 @@ Singleton {
 
     function reloadDynamicConfs(): void {
         if (usingLua) {
-            const confs = ['eval hl.bind("Caps_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, ignore_mods = true, release = true })', 'eval hl.bind("Num_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, ignore_mods = true, release = true })', 'eval hl.bind("code:66", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, ignore_mods = true, release = true })', 'eval hl.unbind("SUPER + P")', 'eval hl.bind("SUPER + P", hl.dsp.global("caelestia:displayProject"), { description = "Project display" })'];
+            const confs = ['eval hl.bind("Caps_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, ignore_mods = true, release = true })', 'eval hl.bind("Num_Lock", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, ignore_mods = true, release = true })', 'eval hl.bind("code:66", hl.dsp.global("caelestia:refreshDevices"), { locked = true, non_consuming = true, ignore_mods = true, release = true })', 'eval hl.unbind("SUPER + P")', 'eval hl.bind("SUPER + P", hl.dsp.global("caelestia:displayProject"), { description = "Project display" })', 'eval hl.unbind("SUPER + V")', 'eval hl.bind("SUPER + V", hl.dsp.global("caelestia:clipboard"), { description = "Clipboard history" })', 'eval hl.unbind("ALT + Tab")', 'eval hl.bind("ALT + Tab", hl.dsp.global("caelestia:overviewAltTab"), { description = "Overview switcher" })', 'eval hl.bind("Alt_L", hl.dsp.global("caelestia:overviewAltRelease"), { non_consuming = true, ignore_mods = true, release = true })', 'eval hl.bind("Alt_R", hl.dsp.global("caelestia:overviewAltRelease"), { non_consuming = true, ignore_mods = true, release = true })'];
             if (!gesturesRegistered) {
                 gesturesRegistered = true;
 
@@ -192,12 +210,46 @@ Singleton {
             }
             extras.batchMessage(confs);
         } else {
-            extras.batchMessage(["keyword bindlni ,Caps_Lock,global,caelestia:refreshDevices", "keyword bindlni ,Num_Lock,global,caelestia:refreshDevices", "keyword bindlni ,code:66,global,caelestia:refreshDevices", "keyword unbind SUPER, P", "keyword bind SUPER, P, global, caelestia:displayProject"]);
+            extras.batchMessage(["keyword bindlni ,Caps_Lock,global,caelestia:refreshDevices", "keyword bindlni ,Num_Lock,global,caelestia:refreshDevices", "keyword bindlni ,code:66,global,caelestia:refreshDevices", "keyword unbind SUPER, P", "keyword bind SUPER, P, global, caelestia:displayProject", "keyword unbind SUPER, V", "keyword bind SUPER, V, global, caelestia:clipboard", "keyword unbind ALT, Tab", "keyword bind ALT, Tab, global, caelestia:overviewAltTab", "keyword bindrni ,Alt_L,global,caelestia:overviewAltRelease", "keyword bindrni ,Alt_R,global,caelestia:overviewAltRelease"]);
         }
     }
 
     onUsingLuaChanged: reloadDynamicConfs()
-    Component.onCompleted: reloadDynamicConfs()
+    Component.onCompleted: {
+        reloadDynamicConfs();
+        syncAll();
+        startupSyncStep = 0;
+        startupSyncTimer.start();
+    }
+
+    // Re-sync monitor reserved areas, active workspaces, and toplevels shortly after startup so
+    // layer-shell exclusion zones (bar/borders) and autostart windows are reflected immediately
+    // without waiting for the user's first workspace switch.
+    Timer {
+        id: startupSyncTimer
+
+        interval: 250
+        repeat: false
+        onTriggered: {
+            root.syncAll();
+            root.startupSyncStep++;
+            if (root.startupSyncStep === 1) {
+                interval = 750;
+                restart();
+            } else if (root.startupSyncStep === 2) {
+                interval = 1500;
+                restart();
+            }
+        }
+    }
+
+    Timer {
+        id: layoutSettleTimer
+
+        interval: 120
+        repeat: false
+        onTriggered: root.layoutRevision++
+    }
 
     Connections {
         function onRawEvent(event: HyprlandEvent): void {
@@ -209,18 +261,25 @@ Singleton {
                 root.configReloaded();
                 root.gesturesRegistered = false;
                 root.reloadDynamicConfs();
+                root.syncAll();
             } else if (["workspace", "moveworkspace", "activespecial", "focusedmon"].includes(n)) {
                 Hyprland.refreshWorkspaces();
                 Hyprland.refreshMonitors();
+                layoutSettleTimer.restart();
             } else if (["openwindow", "closewindow", "movewindow"].includes(n)) {
                 Hyprland.refreshToplevels();
                 Hyprland.refreshWorkspaces();
+                Hyprland.refreshMonitors();
+                layoutSettleTimer.restart();
             } else if (n.includes("mon")) {
                 Hyprland.refreshMonitors();
+                layoutSettleTimer.restart();
             } else if (n.includes("workspace")) {
                 Hyprland.refreshWorkspaces();
+                layoutSettleTimer.restart();
             } else if (n.includes("window") || n.includes("group") || ["pin", "fullscreen", "changefloatingmode", "minimize"].includes(n)) {
                 Hyprland.refreshToplevels();
+                layoutSettleTimer.restart();
             }
         }
 

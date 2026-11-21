@@ -50,8 +50,17 @@ PersistentProperties {
 
     property date dashboardDate: new Date()
 
+    // Whether the overview is currently being driven by an Alt+Tab hold session
+    property bool overviewAltTabActive
+
     // Asks the overview to turn its page (-1 back, 1 forward), for the swipe gestures
     signal overviewPageRequested(int delta)
+
+    // Advances the overview selection within the current page (Alt+Tab)
+    signal overviewCycleRequested
+
+    // Commits the currently selected overview workspace when Alt is released
+    signal overviewCommitRequested
 
     // Asks the bottom-right display projection switcher to open or advance on this screen
     signal displayProjectRequested
