@@ -37,6 +37,8 @@ class LauncherConfig : public settings::ObjectNode {
     CONFIG_GLOBAL_PROPERTY(QString, actionPrefix, u">"_s)
     CONFIG_GLOBAL_PROPERTY(bool, enableDangerousActions, false)
     CONFIG_GLOBAL_PROPERTY(bool, enableSupergfxctl, false)
+    // Automatically send paste shortcut to the active window after picking a clipboard entry
+    CONFIG_GLOBAL_PROPERTY(bool, clipboardAutoPaste, true)
     // AI search (">ai "): the service to ask, its key and model, and an endpoint
     // override for OpenAI-compatible ones. The provider ids and their defaults live
     // in modules/launcher/services/Ai.qml
@@ -53,6 +55,18 @@ class LauncherConfig : public settings::ObjectNode {
     CONFIG_SUBOBJECT(LauncherUseFuzzy, useFuzzy)
     CONFIG_GLOBAL_PROPERTY(QVariantList, actions,
         DEFAULT_ARG({
+            vmap({
+                { u"name"_s, markCtx(u"Clipboard"_s, u"launcher action"_s) },
+                { u"icon"_s, u"content_paste"_s },
+                { u"description"_s, mark(u"Browse, search and paste from clipboard history"_s) },
+                { u"command"_s, QStringList{ u"autocomplete"_s, u"clip"_s } },
+            }),
+            vmap({
+                { u"name"_s, markCtx(u"Convert"_s, u"launcher action"_s) },
+                { u"icon"_s, u"sync_alt"_s },
+                { u"description"_s, mark(u"Convert images, videos, audio and documents"_s) },
+                { u"command"_s, QStringList{ u"autocomplete"_s, u"convert"_s } },
+            }),
             vmap({
                 { u"name"_s, markCtx(u"Calculator"_s, u"launcher action"_s) },
                 { u"icon"_s, u"calculate"_s },

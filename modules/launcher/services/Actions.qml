@@ -21,7 +21,28 @@ Searcher {
     Variants {
         id: variants
 
-        model: GlobalConfig.launcher.actions.filter(a => (a.enabled ?? true) && (GlobalConfig.launcher.enableDangerousActions || !(a.dangerous ?? false)) && (a.command?.[0] !== "autocomplete" || a.command?.[1] !== "gpu" || Config.launcher.enableSupergfxctl) && (a.command?.[0] !== "autocomplete" || a.command?.[1] !== "ai" || GlobalConfig.launcher.enableAiSearch))
+        model: {
+            const base = [...GlobalConfig.launcher.actions];
+            if (!base.some(a => a.command?.[0] === "autocomplete" && a.command?.[1] === "clip")) {
+                base.unshift({
+                    name: "Clipboard",
+                    icon: "content_paste",
+                    description: "Browse, search and paste from clipboard history",
+                    command: ["autocomplete", "clip"],
+                    enabled: true
+                });
+            }
+            if (!base.some(a => a.command?.[0] === "autocomplete" && a.command?.[1] === "convert")) {
+                base.splice(1, 0, {
+                    name: "Convert",
+                    icon: "sync_alt",
+                    description: "Convert images, videos, audio and documents",
+                    command: ["autocomplete", "convert"],
+                    enabled: true
+                });
+            }
+            return base.filter(a => (a.enabled ?? true) && (GlobalConfig.launcher.enableDangerousActions || !(a.dangerous ?? false)) && (a.command?.[0] !== "autocomplete" || a.command?.[1] !== "gpu" || Config.launcher.enableSupergfxctl) && (a.command?.[0] !== "autocomplete" || a.command?.[1] !== "ai" || GlobalConfig.launcher.enableAiSearch));
+        }
 
         Action {}
     }

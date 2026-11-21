@@ -165,11 +165,19 @@ PageBase {
         }
 
         ToggleRow {
-            last: true
             text: Tr.tr("Enable AI search")
             subtext: Tr.tr("Ask the configured AI service questions from the launcher with the AI action")
             checked: GlobalConfig.launcher.enableAiSearch
             onToggled: GlobalConfig.launcher.enableAiSearch = checked
+        }
+
+        ToggleRow {
+            last: true
+            // SEARCH: clipboard history paste auto cliphist
+            text: Tr.tr("Clipboard auto-paste")
+            subtext: Tr.tr("Automatically paste the selected clipboard item into the active window")
+            checked: GlobalConfig.launcher.clipboardAutoPaste
+            onToggled: GlobalConfig.launcher.clipboardAutoPaste = checked
         }
 
         // Fuzzy search

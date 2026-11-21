@@ -60,9 +60,9 @@ Item {
             if (!request)
                 return;
 
-            root.screenState.launcherSearchRequest = "";
             search.text = request;
             search.cursorPosition = search.text.length;
+            root.screenState.launcherSearchRequest = "";
             search.forceActiveFocus();
         }
 
@@ -88,7 +88,7 @@ Item {
                     Wallpapers.setWallpaper(currentItem.modelData.path);
                     root.screenState.launcher = false;
                 } else if (text.startsWith(GlobalConfig.launcher.actionPrefix)) {
-                    if (text.startsWith(`${GlobalConfig.launcher.actionPrefix}calc `) || ["ai", "browser"].includes(list.currentList?.state))
+                    if (text.startsWith(`${GlobalConfig.launcher.actionPrefix}calc `) || ["ai", "browser", "convert"].includes(list.currentList?.state))
                         currentItem.onClicked();
                     else
                         currentItem.modelData.onClicked(list.currentList);
@@ -113,6 +113,26 @@ Item {
             // are left alone so shift selection and word-wise movement keep working.
             const arrowModifiers = Qt.ShiftModifier | Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier;
             const plainArrow = (event.key === Qt.Key_Left || event.key === Qt.Key_Right) && !(event.modifiers & arrowModifiers);
+
+            if (list.currentList?.state === "clipboard") {
+                if (event.key === Qt.Key_Backtab || (event.key === Qt.Key_Tab && (event.modifiers & Qt.ShiftModifier))) {
+                    Clipboard.cycleCategory(-1);
+                    event.accepted = true;
+                    return;
+                }
+                if (event.key === Qt.Key_Tab) {
+                    Clipboard.cycleCategory(1);
+                    event.accepted = true;
+                    return;
+                }
+                if ((event.modifiers & Qt.ShiftModifier) && event.key === Qt.Key_Delete) {
+                    const item = list.currentList?.currentItem?.modelData;
+                    if (item && !item.isClearAction)
+                        Clipboard.deleteItem(item);
+                    event.accepted = true;
+                    return;
+                }
+            }
 
             if (list.showWallpapers && (event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_Tab) {
                 Wallpapers.setWallpaperMode(Wallpapers.wallpaperMode === "static" ? "animated" : "static");
@@ -160,8 +180,13 @@ Item {
             }
 
             function onLauncherChanged(): void {
-                if (!root.screenState.launcher)
+                if (!root.screenState.launcher) {
                     search.text = "";
+                    Clipboard.resetCategory();
+                } else {
+                    search.takeSearchRequest();
+                    search.forceActiveFocus();
+                }
             }
 
             function onSessionChanged(): void {

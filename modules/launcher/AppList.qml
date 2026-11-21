@@ -16,14 +16,15 @@ StyledListView {
     required property SearchBar search
     required property ScreenState screenState
 
-    property string displayText
+    property string displayText: search.text || screenState.launcherSearchRequest
 
-    readonly property string requestedState: stateForText(search.text)
+    readonly property string effectiveSearchText: search.text || screenState.launcherSearchRequest
+    readonly property string requestedState: stateForText(effectiveSearchText)
     readonly property string displayState: stateForText(displayText)
 
     function syncDisplayText(): void {
         if (screenState.launcher && requestedState === displayState)
-            displayText = search.text;
+            displayText = effectiveSearchText;
     }
 
     function stateForText(text: string): string {
@@ -43,6 +44,12 @@ StyledListView {
 
             if (text === `${prefix}b` || text.startsWith(`${prefix}b `))
                 return "browser";
+
+            if (text === `${prefix}clip` || text.startsWith(`${prefix}clip `))
+                return "clipboard";
+
+            if (text === `${prefix}convert` || text.startsWith(`${prefix}convert `))
+                return "convert";
 
             return "actions";
         }
@@ -64,6 +71,10 @@ StyledListView {
             return SSH.search(text);
         case "browser":
             return [0];
+        case "clipboard":
+            return Clipboard.search(text);
+        case "convert":
+            return [0];
         default:
             return Apps.search(text);
         }
@@ -74,6 +85,7 @@ StyledListView {
             SSH.hostRevision;
             Supergfxctl.modeRevision;
             Supergfxctl.modeData;
+            Clipboard.revision;
             return root.resultsForText(root.displayText);
         }
         onValuesChanged: root.currentIndex = 0
@@ -81,10 +93,11 @@ StyledListView {
 
     spacing: Tokens.spacing.small
     orientation: Qt.Vertical
+    clip: true
     // The AI answer is one tall wrapping row, so its real content height is
     // used there; every other delegate is a fixed-height row, still capped by
     // maxShown. ContentList clamps the whole thing to maxHeight either way.
-    implicitHeight: state === "ai" ? contentHeight : (Tokens.sizes.launcher.itemHeight + spacing) * Math.min(Config.launcher.maxShown, count) - spacing
+    implicitHeight: (state === "ai" || state === "convert") ? contentHeight : (Tokens.sizes.launcher.itemHeight + spacing) * Math.min(Config.launcher.maxShown, count) - spacing
 
     preferredHighlightBegin: 0
     preferredHighlightEnd: height
@@ -92,6 +105,7 @@ StyledListView {
 
     highlightFollowsCurrentItem: false
     highlight: StyledRect {
+        visible: root.state !== "convert"
         radius: Tokens.rounding.large
         color: Colours.palette.m3onSurface
         opacity: 0.08
@@ -112,9 +126,15 @@ StyledListView {
             Supergfxctl.reload();
         else if (state === "ssh")
             SSH.reload();
+        else if (state === "clipboard")
+            Clipboard.reload();
     }
 
-    Component.onCompleted: displayText = search.text
+    Component.onCompleted: {
+        displayText = effectiveSearchText;
+        if (requestedState === "clipboard")
+            Clipboard.reload();
+    }
 
     states: [
         State {
@@ -164,6 +184,20 @@ StyledListView {
 
             PropertyChanges {
                 root.delegate: browserItem
+            }
+        },
+        State {
+            name: "clipboard"
+
+            PropertyChanges {
+                root.delegate: clipboardItem
+            }
+        },
+        State {
+            name: "convert"
+
+            PropertyChanges {
+                root.delegate: convertItem
             }
         }
     ]
@@ -334,6 +368,22 @@ StyledListView {
         }
     }
 
+    Component {
+        id: clipboardItem
+
+        ClipboardItem {
+            list: root
+        }
+    }
+
+    Component {
+        id: convertItem
+
+        ConvertItem {
+            list: root
+        }
+    }
+
     Connections {
         function onTextChanged() {
             root.syncDisplayText();
@@ -345,6 +395,8 @@ StyledListView {
     Connections {
         function onLauncherChanged() {
             root.syncDisplayText();
+            if (root.screenState.launcher && root.requestedState === "clipboard")
+                Clipboard.reload();
         }
 
         target: root.screenState
