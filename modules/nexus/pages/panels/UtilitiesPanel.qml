@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick.Layouts
 import Caelestia.Config
 import Caelestia.I18n
+import qs.components
 import qs.services
 import qs.utils
 import qs.modules.nexus.common
@@ -10,24 +11,54 @@ import qs.modules.nexus.common
 PageBase {
     id: root
 
-    function isToggleOn(id: string): bool {
-        const item = Config.utilities.quickToggles.values.find(t => t.id === id);
-        return item?.enabled ?? false;
+    readonly property var cardNames: ({
+            keepAwake: Tr.tr("Keep awake"),
+            recorder: Tr.tr("Screen recorder"),
+            phoneShare: Tr.tr("Phone share"),
+            quickToggles: Tr.tr("Quick toggles"),
+            appVolumes: Tr.tr("App volumes")
+        })
+    readonly property var toggleNames: ({
+            wifi: Tr.tr("Wi-Fi"),
+            bluetooth: Tr.tr("Bluetooth"),
+            mic: Tr.tr("Microphone"),
+            timer: Tr.tr("Timer"),
+            settings: Tr.tr("Settings"),
+            gameMode: Tr.tr("Game mode"),
+            wallpaperPlaying: Tr.tr("Live wallpaper"),
+            dnd: Tr.tr("Do not disturb"),
+            vpn: Tr.tr("VPN")
+        })
+    // Only these have a smaller form: Keep awake drops the line under its title and the "active since" chip, the
+    // recorder drops its list of recordings, and app volumes folds its sliders away behind a caret or stands them
+    // upright
+    readonly property var cardSizeOptions: {
+        const sizes = [
+            {
+                value: "normal",
+                label: Tr.trCtx("Normal", "card size")
+            },
+            {
+                value: "compact",
+                label: Tr.trCtx("Compact", "card size")
+            }
+        ];
+        return {
+            keepAwake: sizes,
+            recorder: sizes,
+            appVolumes: [...sizes, {
+                    value: "vertical",
+                    label: Tr.trCtx("Vertical", "card size")
+                }]
+        };
     }
 
-    function setToggleOn(id: string, on: bool): void {
-        const list = GlobalConfig.utilities.quickToggles;
-        for (let i = 0; i < list.count; i++) {
-            const item = list.at(i);
-            if (item.id === id) {
-                item.enabled = on;
-                return;
-            }
-        }
-        list.insert({
-            id,
-            enabled: on
-        });
+    function isCardOn(id: string): bool {
+        return Config.utilities.cards[id] ?? false;
+    }
+
+    function setCardOn(id: string, on: bool): void {
+        GlobalConfig.utilities.cards[id] = on;
     }
 
     title: Tr.tr("Utilities")
@@ -54,39 +85,83 @@ PageBase {
             onToggled: GlobalConfig.utilities.enabled = checked
         }
 
+        // Layout
+        SectionHeader {
+            text: Tr.tr("Layout")
+        }
+
+        UtilitiesPreview {
+            Layout.fillWidth: true
+            Layout.bottomMargin: Tokens.spacing.small
+            cardNames: root.cardNames
+            toggleNames: root.toggleNames
+        }
+
         // Cards
         SectionHeader {
             text: Tr.tr("Cards")
         }
 
-        ToggleRow {
+        StyledText {
+            Layout.fillWidth: true
+            Layout.bottomMargin: Tokens.spacing.small
+            text: Tr.tr("The cards in the panel, top to bottom. Drag to reorder, switch one off to hide it, and press the size to change how much of the card shows.")
+            color: Colours.palette.m3outline
+            font: Tokens.font.label.small
+            wrapMode: Text.WordWrap
+        }
+
+        ListEditor {
+            function labelFor(item: var): string {
+                return root.cardNames[item.id] ?? item.id;
+            }
+
+            function toggledFor(item: var): bool {
+                return root.isCardOn(item.id);
+            }
+
+            function sizeFor(item: var): var {
+                return item.size;
+            }
+
+            function sizeOptionsFor(item: var): var {
+                return root.cardSizeOptions[item.id] ?? [];
+            }
+
+            z: 1
             first: true
-            text: Tr.tr("Keep awake")
-            subtext: Tr.tr("Show the idle inhibitor card")
-            checked: Config.utilities.cards.keepAwake
-            onToggled: GlobalConfig.utilities.cards.keepAwake = checked
+            removable: false
+            values: Config.utilities.cards.order.values
+            onItemMoved: (from, to) => GlobalConfig.utilities.cards.order.move(from, to)
+            onItemToggled: (index, checked) => root.setCardOn(Config.utilities.cards.order.values[index].id, checked)
+            onItemResized: (index, size) => GlobalConfig.utilities.cards.order.at(index).size = size
         }
 
-        ToggleRow {
-            text: Tr.tr("Screen recorder")
-            subtext: Tr.tr("Show the screen recorder card")
-            checked: Config.utilities.cards.recorder
-            onToggled: GlobalConfig.utilities.cards.recorder = checked
-        }
+        // Puts back a card that is missing from the order list, which is what a config written before the card
+        // existed ends up with; without this there is no row to switch on and no way to add one
+        DialogSelectButton {
+            rootParent: root.flickable
+            icon: "add"
+            label: Tr.tr("Add card")
+            header: Tr.tr("Add a card")
+            acceptLabel: Tr.trCtx("Add", "button")
+            visible: model.length > 0
 
-        ToggleRow {
-            text: Tr.tr("Phone share")
-            subtext: Tr.tr("Show the phone share card and run KDE Connect")
-            checked: Config.utilities.cards.phoneShare
-            onToggled: GlobalConfig.utilities.cards.phoneShare = checked
-        }
+            model: Object.keys(root.cardNames).filter(id => !Config.utilities.cards.order.values.some(c => c.id === id)).map(id => ({
+                        id,
+                        label: root.cardNames[id]
+                    }))
 
-        ToggleRow {
-            last: true
-            text: Tr.tr("Quick toggles")
-            subtext: Tr.tr("Show the quick toggles card")
-            checked: Config.utilities.cards.quickToggles
-            onToggled: GlobalConfig.utilities.cards.quickToggles = checked
+            onAccepted: {
+                if (!selectedItem)
+                    return;
+
+                GlobalConfig.utilities.cards.order.insert({
+                    id: selectedItem,
+                    size: "normal"
+                });
+                root.setCardOn(selectedItem, true);
+            }
         }
 
         // Quick toggles
@@ -94,72 +169,75 @@ PageBase {
             text: Tr.tr("Quick toggles")
         }
 
-        ToggleRow {
+        StyledText {
+            Layout.fillWidth: true
+            Layout.bottomMargin: Tokens.spacing.small
+            text: Tr.tr("The buttons in the quick toggles card, in the order they sit in it. Press the size to make a button wider; a row holds as many columns as set below.")
+            color: Colours.palette.m3outline
+            font: Tokens.font.label.small
+            wrapMode: Text.WordWrap
+        }
+
+        ListEditor {
+            function labelFor(item: var): string {
+                return root.toggleNames[item.id] ?? item.id;
+            }
+
+            function toggledFor(item: var): bool {
+                return item.enabled;
+            }
+
+            function sizeFor(item: var): var {
+                return Math.max(1, Math.min(Config.utilities.cards.toggleColumns, item.span));
+            }
+
+            z: 1
             first: true
-            text: Tr.tr("Wi-Fi")
-            subtext: Tr.tr("Toggle wireless networking")
-            disabled: !Config.utilities.cards.quickToggles
-            checked: root.isToggleOn("wifi")
-            onToggled: root.setToggleOn("wifi", checked)
+            sizeOptions: Array.from({
+                length: Config.utilities.cards.toggleColumns
+            }, (_, i) => ({
+                        value: i + 1,
+                        label: "×" + (i + 1)
+                    }))
+            values: Config.utilities.quickToggles.values
+            onItemMoved: (from, to) => GlobalConfig.utilities.quickToggles.move(from, to)
+            onItemRemoved: index => GlobalConfig.utilities.quickToggles.remove(index)
+            onItemToggled: (index, checked) => GlobalConfig.utilities.quickToggles.at(index).enabled = checked
+            onItemResized: (index, size) => GlobalConfig.utilities.quickToggles.at(index).span = size
         }
 
-        ToggleRow {
-            text: Tr.tr("Bluetooth")
-            subtext: Tr.tr("Toggle the Bluetooth adapter")
-            disabled: !Config.utilities.cards.quickToggles
-            checked: root.isToggleOn("bluetooth")
-            onToggled: root.setToggleOn("bluetooth", checked)
+        DialogSelectButton {
+            rootParent: root.flickable
+            icon: "add"
+            label: Tr.tr("Add toggle")
+            header: Tr.tr("Add a quick toggle")
+            acceptLabel: Tr.trCtx("Add", "button")
+
+            model: Object.keys(root.toggleNames).filter(id => !Config.utilities.quickToggles.values.some(t => t.id === id)).map(id => ({
+                        id,
+                        label: root.toggleNames[id]
+                    }))
+
+            onAccepted: {
+                if (!selectedItem)
+                    return;
+
+                GlobalConfig.utilities.quickToggles.insert({
+                    id: selectedItem,
+                    enabled: true
+                });
+            }
         }
 
-        ToggleRow {
-            text: Tr.tr("Microphone")
-            subtext: Tr.tr("Mute or unmute the default source")
-            disabled: !Config.utilities.cards.quickToggles
-            checked: root.isToggleOn("mic")
-            onToggled: root.setToggleOn("mic", checked)
-        }
-
-        ToggleRow {
-            text: Tr.tr("Timer")
-            subtext: Tr.tr("Open the timer panel")
-            disabled: !Config.utilities.cards.quickToggles
-            checked: root.isToggleOn("timer")
-            onToggled: root.setToggleOn("timer", checked)
-        }
-
-        ToggleRow {
-            text: Tr.tr("Settings")
-            subtext: Tr.tr("Open the settings window")
-            disabled: !Config.utilities.cards.quickToggles
-            checked: root.isToggleOn("settings")
-            onToggled: root.setToggleOn("settings", checked)
-        }
-
-        ToggleRow {
-            // SEARCH: gaming performance
-            text: Tr.tr("Game mode")
-            subtext: Tr.tr("Toggle game mode")
-            disabled: !Config.utilities.cards.quickToggles
-            checked: root.isToggleOn("gameMode")
-            onToggled: root.setToggleOn("gameMode", checked)
-        }
-
-        ToggleRow {
-            // SEARCH: dnd silence quiet
-            text: Tr.tr("Do not disturb")
-            subtext: Tr.tr("Silence notifications")
-            disabled: !Config.utilities.cards.quickToggles
-            checked: root.isToggleOn("dnd")
-            onToggled: root.setToggleOn("dnd", checked)
-        }
-
-        ToggleRow {
+        StepperRow {
+            first: true
             last: true
-            text: Tr.tr("VPN")
-            subtext: Tr.tr("Connect or disconnect the VPN")
-            disabled: !Config.utilities.cards.quickToggles
-            checked: root.isToggleOn("vpn")
-            onToggled: root.setToggleOn("vpn", checked)
+            label: Tr.tr("Columns")
+            subtext: Tr.tr("How many toggles fit side by side in a row")
+            value: Config.utilities.cards.toggleColumns
+            from: 1
+            to: 6
+            onMoved: v => GlobalConfig.utilities.cards.toggleColumns = Math.round(v)
         }
 
         // Desktop text

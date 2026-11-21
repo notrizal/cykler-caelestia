@@ -76,8 +76,7 @@ if("shell" IN_LIST ENABLE_MODULES)
     install(PROGRAMS assets/fetch-tile.sh DESTINATION "${INSTALL_QSCONFDIR}/assets")
     # Runtime helper the process list spawns through Quickshell.shellPath; the
     # dev-only scripts beside it stay out of the install
-    install(PROGRAMS scripts/caelestia-process-monitor.py DESTINATION "${INSTALL_QSCONFDIR}/scripts")
-    install(PROGRAMS scripts/caelestia-extract-videothumbs.py DESTINATION "${INSTALL_QSCONFDIR}/scripts")
+    install(PROGRAMS scripts/caelestia-process-monitor.py scripts/caelestia-calendar.py scripts/caelestia-extract-videothumbs.py DESTINATION "${INSTALL_QSCONFDIR}/scripts")
 
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/shell.qml")
     file(READ shell.qml SHELL_QML)

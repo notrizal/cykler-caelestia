@@ -4,7 +4,9 @@
 
 A personal fork of [caelestia-dots/shell](https://github.com/caelestia-dots/shell) with the features we wanted on top of it.
 
-https://github.com/user-attachments/assets/35d5068b-dca0-414d-b933-bd5a9d548262
+https://github.com/user-attachments/assets/83bc3015-1b8b-4b44-988c-f8a59c1dafeb
+
+**[▶ Watch the full showcase](https://cykler.dev/projects/caelestia)**
 
 ![GitHub last commit](https://img.shields.io/github/last-commit/cykler01/cykler-caelestia?style=flat-square&labelColor=101418&color=9ccbfb)
 ![GitHub release](https://img.shields.io/github/v/release/cykler01/cykler-caelestia?style=flat-square&labelColor=101418&color=9ccbfb)
@@ -54,6 +56,7 @@ has pulled in and built on.
 | **Input settings** | Mouse sensitivity, scroll speed, touchpad scroll speed and acceleration, applied at runtime and put back after a Hyprland reload | *Nexus → Input* | [▶](https://cykler.dev/caelestia/demos/input) |
 | **Local music player & library** | Plays `paths.musicDir` in-shell with a queue, shuffle and repeat, and browses the library by folder, artist, album or search | *Notif popout → Library* | [▶](https://cykler.dev/caelestia/demos/media-player) |
 | **System-wide equalizer** | Opt-in ten-band PipeWire filter chain with presets, equalizing every stream rather than just the player | *Settings → Audio* | [▶](https://cykler.dev/caelestia/demos/equalizer) |
+| **Play on several devices** | Send whatever is playing to more than one output at once - speakers and a headset, a desk and another room - with the output device itself unchanged, so per-app routing and volume go on working. Each extra device is a PipeWire loopback the shell owns, so nothing is left loaded if the shell goes away | *Settings → Audio*, or the speaker button in the bar's audio popout | — |
 | **Notch** | A pill that drops down on track change with album art, controls and a mirrored spectrum, plus a standing notch that shows the clock, a running timer and what is playing while the bar's middle is free (the bar then drops its own clock). It doubles as a dynamic island: it drops down to say caps lock or num lock changed, shows notifications as they arrive instead of the corner popup, and asks for a password when something privileged needs one | *Nexus → Panels → Notch* | [▶](https://cykler.dev/caelestia/demos/notch) |
 | **Notification dock improvements** | Chat apps keep every message instead of only the newest, and grouped notifications show each message's own picture | *Sidebar* | [▶](https://cykler.dev/caelestia/demos/notifications) |
 | **Notification silencing** | Per-app allow/discard/silence rules, plus a do-not-disturb shortcut, so noisy apps can be muted without turning everything off | *Settings → Services → Notifications → Sources* | [▶](https://cykler.dev/caelestia/demos/notification-silencing) |
@@ -83,7 +86,7 @@ has pulled in and built on.
 | **Phone integration** | Pairs with an Android phone over KDE Connect: drop files on a device to send them, browse and download its storage, and mirror its screen with `scrcpy` | *Utilities card* | [▶](https://cykler.dev/caelestia/demos/phone-integration) |
 | **Polkit agent** | Asks for the password to do something privileged in the shell's own prompt instead of the GNOME dialog | *Whole session* | [▶](https://cykler.dev/caelestia/demos/polkit) |
 | **Graphical installer** | Does the whole install from a window - what to build, which add-ons to include, and the theme to log into - asking exactly what `install.sh` would, and keeps going in the background if the window is closed | `./install.sh --gui` | — |
-| **SDDM login theme** | A login screen in the shell's own colours, wearing whichever account's wallpaper and palette is picked, with battery, network and Bluetooth status, a power menu and optional fingerprint login | `./install.sh --with login-screen` | — |
+| **SDDM login theme** | A login screen in the shell's own colours, wearing whichever account's wallpaper and palette is picked, with the wi-fi it is on and the charge left in the battery, a power menu and optional fingerprint login | `./install.sh --with login-screen` | — |
 | **Scheduling priority** | The stock ananicy rulesets classify `qs` as a background service and give it nice 10, which is fair for a bar but not for a whole desktop shell - it costs wakeup latency and drops frames while scrolling. Writes a rule asking for nice -6 instead, the same as plasmashell gets, and renices the running shell so it lands without a restart | *Nexus → Plugins* | — |
 | **Download progress** | A ring in the bar that fills as a browser or Steam download runs, with the file name, percentage and speed on hover and in the notch; a transfer that cannot say how large it will be gets a turning arc instead | Bar / notch | [▶](https://cykler.dev/caelestia/demos/download-progress) |
 | **Workspace window previews** | Hovering a window's icon in the taskbar shows a live preview of that window and its title, so a workspace's windows can be told apart before switching to one | Taskbar workspace icons | [▶](https://cykler.dev/caelestia/demos/window-previews) |
