@@ -19,6 +19,8 @@ Singleton {
     // Which activity the notch is showing, highest priority first; "" is nothing to show. The
     // notch's own standing content (clock, timer, media) is what it falls back to.
     readonly property string activity: {
+        if (root.focusPromptShown)
+            return "focusPrompt";
         if (root.notifShown)
             return "notif";
         if (root.lockShown)
@@ -26,6 +28,7 @@ Singleton {
         return "";
     }
     readonly property bool hasActivity: root.activity !== ""
+    readonly property bool focusPromptShown: FocusTimer.promptShown && GlobalConfig.notch.enabled
 
     // Whether the authentication prompt is up. It is a panel of its own (it has to hold the
     // keyboard, which the drawers window cannot), so the notch steps aside for it rather than
@@ -42,6 +45,7 @@ Singleton {
     // the next download or the next timer is a new thing worth seeing. Kept here rather than in
     // each screen's notch so putting one away on one monitor puts it away on all of them.
     property bool timerTucked
+    property bool focusTucked
     property bool stopwatchTucked
     property bool downloadsTucked
     property bool recordingTucked
@@ -106,6 +110,12 @@ Singleton {
     function showNotif(notif: var): void {
         if (!GlobalConfig.notch.enabled || !GlobalConfig.notch.showNotifs)
             return;
+        // Avoid duplicating Focus Timer's own "about to end" popup when our interactive
+        // Notch prompt is already handling it.
+        if (root.focusPromptShown && (notif?.desktopEntry === "io.github.focustimerhq.FocusTimer" || (notif?.appName ?? "").toLowerCase() === "focus timer")) {
+            notif.popup = false;
+            return;
+        }
         if (!notif?.popup || ShellState.notchCovered())
             return;
         // Checked before anything is claimed: an app the island is not for has to keep its popup
@@ -146,6 +156,15 @@ Singleton {
         }
 
         target: CountdownTimer
+    }
+
+    Connections {
+        function onActiveChanged(): void {
+            if (!FocusTimer.active)
+                root.focusTucked = false;
+        }
+
+        target: FocusTimer
     }
 
     Connections {

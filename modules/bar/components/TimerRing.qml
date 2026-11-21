@@ -12,6 +12,7 @@ StyledRect {
     id: root
 
     readonly property int size: Tokens.sizes.bar.innerWidth
+    readonly property bool useFocus: !CountdownTimer.active && FocusTimer.active
 
     implicitWidth: root.size
     implicitHeight: root.size
@@ -52,16 +53,28 @@ StyledRect {
         anchors.margins: Tokens.padding.extraSmall / 2
 
         strokeWidth: 3
-        value: CountdownTimer.progress
+        value: root.useFocus ? FocusTimer.progress : CountdownTimer.progress
         // A paused count stays visible but steps back to the outline colour, and one that has rung turns tertiary
-        fgColour: CountdownTimer.finished ? Colours.palette.m3tertiary : CountdownTimer.running ? Colours.palette.m3primary : Colours.palette.m3outline
+        fgColour: {
+            if (root.useFocus)
+                return FocusTimer.isBreak ? Colours.palette.m3tertiary : FocusTimer.running ? Colours.palette.m3primary : Colours.palette.m3outline;
+            return CountdownTimer.finished ? Colours.palette.m3tertiary : CountdownTimer.running ? Colours.palette.m3primary : Colours.palette.m3outline;
+        }
         bgColour: Qt.alpha(Colours.palette.m3outlineVariant, 0.6)
+
+        Behavior on clampedVal {
+            Anim {}
+        }
     }
 
     MaterialIcon {
         anchors.centerIn: parent
-        text: CountdownTimer.finished ? "alarm" : "timer"
-        color: CountdownTimer.finished ? Colours.palette.m3tertiary : CountdownTimer.running ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant
+        text: root.useFocus ? (FocusTimer.isBreak ? "coffee" : "center_focus_strong") : (CountdownTimer.finished ? "alarm" : "timer")
+        color: {
+            if (root.useFocus)
+                return FocusTimer.isBreak ? Colours.palette.m3tertiary : FocusTimer.running ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant;
+            return CountdownTimer.finished ? Colours.palette.m3tertiary : CountdownTimer.running ? Colours.palette.m3primary : Colours.palette.m3onSurfaceVariant;
+        }
         fontStyle: Tokens.font.icon.small
     }
 }

@@ -22,6 +22,7 @@ qml_module(caelestia-services
         hyprextras.cpp
         discordrpc.cpp
         downloads.cpp
+        focustimerservice.cpp
         adbdiscovery.cpp
         kdeconnectdaemon.cpp
     LIBRARIES

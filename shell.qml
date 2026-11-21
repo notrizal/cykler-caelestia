@@ -14,6 +14,7 @@ import "modules/overview"
 import "modules/polkit"
 import "modules/todopopout"
 import "modules/notepadpopout"
+import "modules/focusoverlay"
 import "modules/lock"
 import QtQuick
 import Quickshell
@@ -24,6 +25,7 @@ import qs.modules.areapicker
 import qs.modules.background
 import qs.modules.bottomtext
 import qs.modules.drawers
+import qs.modules.focusoverlay
 import qs.modules.lock
 import qs.daemons
 
@@ -76,6 +78,7 @@ ShellRoot {
     Overview {}
     TodoPopout {}
     NotepadPopout {}
+    FocusOverlay {}
     Lock {
         id: lock
     }

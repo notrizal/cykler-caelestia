@@ -31,6 +31,7 @@ Item {
     // NOTE(fork): a side bubble put away from the bubble itself carries on running with only a
     // small mark here to say so. Pressing the mark brings the bubble back. Set by the Wrapper.
     property bool timerTucked
+    property bool focusTucked
     property bool stopwatchTucked
     property bool downloadsTucked
     property bool recordingTucked
@@ -170,7 +171,7 @@ Item {
         active: root.activityHeld
         opacity: root.activity === "" ? 0 : 1
         visible: opacity > 0
-        sourceComponent: root.shownActivity === "notif" ? notifPill : lockPill
+        sourceComponent: root.shownActivity === "focusPrompt" ? focusPromptPill : root.shownActivity === "notif" ? notifPill : lockPill
 
         Behavior on opacity {
             Anim {
@@ -250,7 +251,7 @@ Item {
             // back when it is pressed. The pill's own width eases, so these grow it rather than
             // appearing in it.
             RowLayout {
-                visible: root.timerTucked || root.stopwatchTucked || root.downloadsTucked || root.recordingTucked
+                visible: root.timerTucked || root.focusTucked || root.stopwatchTucked || root.downloadsTucked || root.recordingTucked
                 Layout.alignment: Qt.AlignVCenter
                 spacing: 0
 
@@ -270,6 +271,12 @@ Item {
                     visible: root.timerTucked
                     icon: "timer"
                     onClicked: NotchIsland.timerTucked = false
+                }
+
+                Mark {
+                    visible: root.focusTucked
+                    icon: "center_focus_strong"
+                    onClicked: NotchIsland.focusTucked = false
                 }
 
                 Mark {
@@ -428,6 +435,12 @@ Item {
         id: notifPill
 
         NotifPill {}
+    }
+
+    Component {
+        id: focusPromptPill
+
+        FocusPromptPill {}
     }
 
     // A mark for a side bubble that has been put away: an outline glyph rather than a filled one,

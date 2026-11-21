@@ -10,7 +10,10 @@ import qs.services
 ColumnLayout {
     id: root
 
+    readonly property bool useFocus: !CountdownTimer.active && FocusTimer.active
     readonly property string statusText: {
+        if (useFocus)
+            return FocusTimer.connected ? Tr.tr("Synced with Focus Timer") : Tr.tr("Local Pomodoro");
         if (CountdownTimer.finished)
             return Tr.tr("Timer finished");
         if (CountdownTimer.running)
@@ -21,13 +24,13 @@ ColumnLayout {
     spacing: Tokens.spacing.small
 
     StyledText {
-        text: CountdownTimer.finished ? Tr.tr("Time's up") : Tr.tr("Timer")
-        color: CountdownTimer.finished ? Colours.palette.m3tertiary : Colours.palette.m3onSurfaceVariant
+        text: root.useFocus ? FocusTimer.phaseLabel : (CountdownTimer.finished ? Tr.tr("Time's up") : Tr.tr("Timer"))
+        color: root.useFocus ? (FocusTimer.isBreak ? Colours.palette.m3tertiary : Colours.palette.m3onSurfaceVariant) : (CountdownTimer.finished ? Colours.palette.m3tertiary : Colours.palette.m3onSurfaceVariant)
         font: Tokens.font.label.medium
     }
 
     StyledText {
-        text: CountdownTimer.display
+        text: root.useFocus ? FocusTimer.display : CountdownTimer.display
         color: Colours.palette.m3onSurface
         font: Tokens.font.clock.size(Tokens.font.headline.medium.pointSize).weight(Font.Bold).build()
     }
@@ -36,8 +39,12 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.preferredWidth: 180
         Layout.topMargin: Tokens.spacing.extraSmall
-        value: CountdownTimer.progress
-        fgColour: CountdownTimer.finished ? Colours.palette.m3tertiary : CountdownTimer.progress > 0 && !CountdownTimer.running ? Colours.palette.m3outline : Colours.palette.m3primary
+        value: root.useFocus ? FocusTimer.progress : CountdownTimer.progress
+        fgColour: {
+            if (root.useFocus)
+                return FocusTimer.isBreak ? Colours.palette.m3tertiary : FocusTimer.running ? Colours.palette.m3primary : Colours.palette.m3outline;
+            return CountdownTimer.finished ? Colours.palette.m3tertiary : CountdownTimer.progress > 0 && !CountdownTimer.running ? Colours.palette.m3outline : Colours.palette.m3primary;
+        }
     }
 
     StyledText {
@@ -47,6 +54,7 @@ ColumnLayout {
     }
 
     StyledText {
+        visible: !root.useFocus
         text: Tr.tr("%1 in all").arg(CountdownTimer.durationDisplay)
         color: Colours.palette.m3outline
         font: Tokens.font.label.small
@@ -57,16 +65,30 @@ ColumnLayout {
         spacing: Tokens.spacing.small
 
         IconButton {
-            visible: !CountdownTimer.finished
-            icon: CountdownTimer.running ? "pause" : "play_arrow"
+            visible: root.useFocus || !CountdownTimer.finished
+            icon: (root.useFocus ? FocusTimer.running : CountdownTimer.running) ? "pause" : "play_arrow"
             type: IconButton.Tonal
-            onClicked: CountdownTimer.toggle()
+            onClicked: root.useFocus ? FocusTimer.toggle() : CountdownTimer.toggle()
         }
 
         TextButton {
-            text: CountdownTimer.finished ? Tr.tr("Dismiss") : Tr.tr("Cancel")
+            visible: root.useFocus
+            text: "+1m"
             type: TextButton.Text
-            onClicked: CountdownTimer.finished ? CountdownTimer.dismiss() : CountdownTimer.reset()
+            onClicked: FocusTimer.extendMins(1)
+        }
+
+        TextButton {
+            visible: root.useFocus
+            text: Tr.tr("Skip")
+            type: TextButton.Text
+            onClicked: FocusTimer.skip()
+        }
+
+        TextButton {
+            text: root.useFocus ? Tr.tr("Stop") : (CountdownTimer.finished ? Tr.tr("Dismiss") : Tr.tr("Cancel"))
+            type: TextButton.Text
+            onClicked: root.useFocus ? FocusTimer.reset() : (CountdownTimer.finished ? CountdownTimer.dismiss() : CountdownTimer.reset())
         }
     }
 }

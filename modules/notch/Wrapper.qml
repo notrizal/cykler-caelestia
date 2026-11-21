@@ -63,6 +63,7 @@ Item {
     // NOTE(fork): a countdown stands beside the clock for as long as it has something left to
     // count, or has rung and not been dismissed (see services/CountdownTimer.qml)
     readonly property bool timerShown: Config.notch.showTimer && CountdownTimer.active
+    readonly property bool focusShown: Config.notch.showTimer && FocusTimer.active
     // NOTE(fork): and a stopwatch stands beside it, on the same switch - they are the same panel's
     // two clocks, and nobody wants one of them in the notch and not the other
     readonly property bool stopwatchShown: Config.notch.showTimer && Stopwatch.active
@@ -75,7 +76,7 @@ Item {
     // NOTE(fork): a screen recording in progress, on the same terms as a download: it brings the
     // notch down on its own while it runs, and the bar shows it instead whenever the notch cannot
     readonly property bool recordingShown: Config.notch.showRecording && Recorder.running && emptyWorkspace
-    readonly property bool persistent: wanted && (Config.notch.showClock || musicShown || timerShown || stopwatchShown)
+    readonly property bool persistent: wanted && (Config.notch.showClock || musicShown || timerShown || focusShown || stopwatchShown)
     // Whether the notch is standing in for the clock, so the bar can drop its own
     readonly property bool showsClock: Config.notch.enabled && wanted && Config.notch.showClock
     // NOTE(fork): and the same for the countdown, so the ring is in one place rather than two
@@ -109,12 +110,13 @@ Item {
     readonly property alias downloadBubble: downloadBubble
     readonly property alias recordingBubble: recordingBubble
     readonly property alias timerBubble: timerBubble
+    readonly property alias focusBubble: focusBubble
     readonly property alias stopwatchBubble: stopwatchBubble
 
-    // Whether the pill is carrying a mark for a bubble that has been put away. The pill only takes
-    // the pointer while it is (see modules/drawers/Regions.qml): with nothing to press on it there
-    // is no reason for it to be in the way of whatever is under the top of the screen.
-    readonly property bool hasMarks: (timerShown && NotchIsland.timerTucked) || (stopwatchShown && NotchIsland.stopwatchTucked) || (downloadsShown && NotchIsland.downloadsTucked) || (recordingShown && NotchIsland.recordingTucked)
+    // Whether the pill is carrying a mark for a bubble that has been put away, or an interactive
+    // Dynamic Island prompt (like Pomodoro about-to-end). The pill only takes the pointer while it
+    // does (see modules/drawers/Regions.qml).
+    readonly property bool hasMarks: (timerShown && NotchIsland.timerTucked) || (focusShown && NotchIsland.focusTucked) || (stopwatchShown && NotchIsland.stopwatchTucked) || (downloadsShown && NotchIsland.downloadsTucked) || (recordingShown && NotchIsland.recordingTucked) || NotchIsland.focusPromptShown
 
     // Services are reference counted, so cava - and the PipeWire capture it reads - stops the
     // moment the pill's own ref (in Pill.qml) goes away. Started cold it has to settle its
@@ -400,6 +402,27 @@ Item {
         }
     }
 
+    Bubble {
+        id: focusBubble
+
+        shown: root.focusShown && root.wanted && root.shouldBeActive && root.inBarProg < 0.001 && !NotchIsland.focusTucked
+        size: root.height
+        detailWidth: focusSegment.detailWidth
+        x: stopwatchBubble.x + (stopwatchBubble.visible ? stopwatchBubble.width + focusBubble.gap : 0)
+        y: 0
+
+        FocusSegment {
+            id: focusSegment
+
+            anchors.fill: parent
+
+            expandProg: focusBubble.expandProg
+            mirrored: focusBubble.mirrored
+            onDismissed: NotchIsland.focusTucked = true
+            onActivated: FocusTimer.openApp()
+        }
+    }
+
     Loader {
         id: content
 
@@ -420,6 +443,7 @@ Item {
             activity: root.activityShown ? NotchIsland.activity : ""
             compact: root.inBarProg > 0.5
             timerTucked: root.timerShown && NotchIsland.timerTucked
+            focusTucked: root.focusShown && NotchIsland.focusTucked
             stopwatchTucked: root.stopwatchShown && NotchIsland.stopwatchTucked
             downloadsTucked: root.downloadsShown && NotchIsland.downloadsTucked
             recordingTucked: root.recordingShown && NotchIsland.recordingTucked

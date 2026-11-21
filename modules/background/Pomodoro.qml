@@ -8,7 +8,7 @@ import qs.components
 import qs.components.controls
 import qs.services
 
-// Focus timer: progress ring on the left, controls on the right
+// Focus timer: progress ring on the left, synced controls on the right
 RowLayout {
     id: root
 
@@ -17,8 +17,8 @@ RowLayout {
     CircularProgress {
         implicitSize: 96
         strokeWidth: 7
-        value: 1 - FocusTimer.remaining / FocusTimer.durationSecs
-        fgColour: FocusTimer.remaining <= 0 ? Colours.palette.m3tertiary : Colours.palette.m3primary
+        value: FocusTimer.progress
+        fgColour: FocusTimer.isBreak ? Colours.palette.m3tertiary : !FocusTimer.active && !FocusTimer.connected && FocusTimer.remaining <= 0 ? Colours.palette.m3tertiary : Colours.palette.m3primary
         bgColour: Colours.palette.m3surfaceContainerHighest
 
         Behavior on clampedVal {
@@ -40,8 +40,8 @@ RowLayout {
 
         StyledText {
             Layout.alignment: Qt.AlignHCenter
-            text: FocusTimer.remaining <= 0 ? Tr.tr("Session complete") : FocusTimer.running ? Tr.tr("Focusing") : Tr.tr("Ready to focus")
-            color: Colours.palette.m3onSurfaceVariant
+            text: FocusTimer.phaseLabel
+            color: FocusTimer.isBreak ? Colours.palette.m3tertiary : Colours.palette.m3onSurfaceVariant
             font: Tokens.font.label.medium
         }
 
@@ -56,6 +56,13 @@ RowLayout {
             }
 
             IconButton {
+                visible: FocusTimer.active
+                icon: "skip_next"
+                type: IconButton.Tonal
+                onClicked: FocusTimer.skip()
+            }
+
+            IconButton {
                 icon: "restart_alt"
                 type: IconButton.Tonal
                 onClicked: FocusTimer.reset()
@@ -66,22 +73,58 @@ RowLayout {
             Layout.alignment: Qt.AlignHCenter
             spacing: Tokens.spacing.small
 
+            // When active (synced or local), offer +1 min extend; when idle locally, allow ±5 min
             IconButton {
+                visible: !FocusTimer.connected && !FocusTimer.active
                 icon: "remove"
                 type: IconButton.Text
                 onClicked: FocusTimer.adjust(-5)
             }
 
-            StyledText {
-                text: Math.round(FocusTimer.durationSecs / 60) + " min"
-                color: Colours.palette.m3onSurfaceVariant
-                font: Tokens.font.label.small
+            StyledRect {
+                implicitWidth: sourceRow.implicitWidth + Tokens.padding.small * 2
+                implicitHeight: sourceRow.implicitHeight + 4
+                radius: Tokens.rounding.full
+                color: FocusTimer.connected ? Colours.palette.m3secondaryContainer : Colours.tPalette.m3surfaceContainerHigh
+
+                StateLayer {
+                    color: FocusTimer.connected ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurface
+                    radius: parent.radius
+                    onClicked: FocusTimer.openApp()
+                }
+
+                RowLayout {
+                    id: sourceRow
+
+                    anchors.centerIn: parent
+                    spacing: 4
+
+                    MaterialIcon {
+                        text: FocusTimer.connected ? "sync" : "open_in_new"
+                        color: FocusTimer.connected ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurfaceVariant
+                        fontStyle: Tokens.font.icon.small
+                    }
+
+                    StyledText {
+                        text: FocusTimer.connected ? "Focus Timer" : `${Math.round(FocusTimer.durationSecs / 60)} min · Open App`
+                        color: FocusTimer.connected ? Colours.palette.m3onSecondaryContainer : Colours.palette.m3onSurfaceVariant
+                        font: Tokens.font.label.small
+                    }
+                }
             }
 
             IconButton {
+                visible: !FocusTimer.connected && !FocusTimer.active
                 icon: "add"
                 type: IconButton.Text
                 onClicked: FocusTimer.adjust(5)
+            }
+
+            IconButton {
+                visible: FocusTimer.active
+                icon: "more_time"
+                type: IconButton.Text
+                onClicked: FocusTimer.extendMins(1)
             }
         }
     }

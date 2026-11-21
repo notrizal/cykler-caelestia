@@ -242,7 +242,7 @@ ColumnLayout {
                 roleValue: "timer"
                 delegate: EntryWrapper {
                     // Its own section, above the clock, taking no room at all while no timer is set
-                    shown: CountdownTimer.active && !root.timerHidden
+                    shown: (CountdownTimer.active || FocusTimer.active) && !root.timerHidden
 
                     TimerRing {
                         objectName: "taskbarTimer"
