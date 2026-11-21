@@ -14,6 +14,7 @@ class DockConfig : public settings::ObjectNode {
     CONFIG_PROPERTY(bool, enabled, true)
     CONFIG_ENUM_PROPERTY(DockVisibility, visibility, DockVisibility::Floating)
     CONFIG_ENUM_PROPERTY(DockHoverEffect, hoverEffect, DockHoverEffect::Magnification)
+    CONFIG_ENUM_PROPERTY(DockActiveClickAction, activeClickAction, DockActiveClickAction::Minimize)
     CONFIG_PROPERTY(int, iconSize, 42)
     CONFIG_PROPERTY(int, previewDelay, 160)
     CONFIG_PROPERTY(int, hideDelay, 350)

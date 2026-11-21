@@ -107,6 +107,24 @@ Singleton {
             GlobalConfig.dock.pinnedApps = [...current, appId];
     }
 
+    function movePinnedToIndex(appId: string, targetIndex: int): void {
+        if (!appId)
+            return;
+        const list = [...GlobalConfig.dock.pinnedApps];
+        const norm = normalizeId(appId);
+        const fromIdx = list.findIndex(id => normalizeId(id) === norm);
+        if (fromIdx < 0)
+            return;
+
+        const clamped = Math.max(0, Math.min(list.length - 1, targetIndex));
+        if (fromIdx === clamped)
+            return;
+
+        const [moved] = list.splice(fromIdx, 1);
+        list.splice(clamped, 0, moved);
+        GlobalConfig.dock.pinnedApps = list;
+    }
+
     function launchEntry(entry: DesktopEntry): void {
         if (!entry)
             return;
@@ -119,6 +137,81 @@ Singleton {
         } else {
             entry.execute();
         }
+    }
+
+    function launchAction(action: var, entry: DesktopEntry): void {
+        if (!action)
+            return;
+
+        if (entry?.runInTerminal && action.command && action.command.length > 0) {
+            Quickshell.execDetached({
+                command: [...GlobalConfig.general.apps.terminal, `${Quickshell.shellDir}/assets/wrap_term_launch.sh`, ...action.command],
+                workingDirectory: entry.workingDirectory
+            });
+        } else {
+            action.execute();
+        }
+    }
+
+    function cycleAppWindow(windows: var, step: int): void {
+        if (!windows || windows.length < 2)
+            return;
+
+        const curIdx = windows.findIndex(w => cleanAddress(w) === root.activeAddress);
+        let nextIdx;
+        if (curIdx < 0)
+            nextIdx = step > 0 ? 0 : windows.length - 1;
+        else
+            nextIdx = (curIdx + step + windows.length) % windows.length;
+
+        focusOrRestoreWindow(windows[nextIdx]);
+    }
+
+    function countNotificationsFor(notifs: var, group: var): int {
+        if (!notifs || notifs.length === 0 || !group)
+            return 0;
+
+        const idCandidates = new Set();
+        const nameCandidates = new Set();
+
+        const addId = v => {
+            const norm = normalizeId(v);
+            if (norm)
+                idCandidates.add(norm);
+        };
+        const addName = v => {
+            const norm = normalizeId(v);
+            if (norm)
+                nameCandidates.add(norm);
+        };
+
+        addId(group.appId);
+        addId(group.entry?.id);
+        addId(group.entry?.startupClass);
+        addName(group.name);
+        addName(group.entry?.name);
+        addName(group.entry?.genericName);
+
+        for (const w of group.windows ?? []) {
+            const ipc = w?.lastIpcObject;
+            addId(ipc?.class);
+            addId(ipc?.initialClass);
+        }
+
+        let count = 0;
+        for (const n of notifs) {
+            if (!n || n.closed)
+                continue;
+
+            const de = normalizeId(n.desktopEntry);
+            const an = normalizeId(n.appName);
+            if (de && idCandidates.has(de)) {
+                count++;
+            } else if (an && (idCandidates.has(an) || nameCandidates.has(an))) {
+                count++;
+            }
+        }
+        return count;
     }
 
     function focusWindowNoWarp(address: string): void {
@@ -209,6 +302,7 @@ Singleton {
         void root.revision;
         void GlobalConfig.dock.pinnedApps;
         void root.activeAddress;
+        const activeNotifs = Notifs.notClosed;
         const groups = new Map();
         const pinnedOrder = [];
 
@@ -228,7 +322,8 @@ Singleton {
                 pinned: true,
                 windows: [],
                 focused: false,
-                minimizedOnly: false
+                minimizedOnly: false,
+                notifCount: 0
             };
             groups.set(key, item);
             pinnedOrder.push(item);
@@ -267,7 +362,8 @@ Singleton {
                     pinned: false,
                     windows: [],
                     focused: false,
-                    minimizedOnly: false
+                    minimizedOnly: false,
+                    notifCount: 0
                 };
                 groups.set(key, group);
                 unpinnedOrder.push(group);
@@ -289,6 +385,7 @@ Singleton {
                 });
                 group.minimizedOnly = group.windows.every(w => isMinimized(w));
             }
+            group.notifCount = countNotificationsFor(activeNotifs, group);
         }
 
         unpinnedOrder.sort((a, b) => a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
@@ -301,6 +398,14 @@ Singleton {
         interval: 25
         repeat: false
         onTriggered: root.revision++
+    }
+
+    Connections {
+        function onLayoutRevisionChanged(): void {
+            root.revision++;
+        }
+
+        target: Hypr
     }
 
     Connections {
@@ -321,6 +426,14 @@ Singleton {
         }
 
         target: DesktopEntries.applications
+    }
+
+    Connections {
+        function onNotified(): void {
+            refreshTimer.restart();
+        }
+
+        target: Notifs
     }
 
     IpcHandler {

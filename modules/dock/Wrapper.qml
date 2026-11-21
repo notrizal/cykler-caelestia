@@ -22,11 +22,16 @@ Item {
     readonly property HyprlandMonitor monitor: screen ? Hypr.monitorFor(screen) : null
     readonly property bool disabledScreen: screen ? Strings.testRegexList(GlobalConfig.dock.excludedScreens, screen.name) : true
     readonly property var dockItems: DockService.buildItems(monitor, Config.dock.perMonitorWindows)
-    readonly property bool hasPinnedItems: dockItems.some(d => d.pinned)
+    readonly property int pinnedCount: dockItems.filter(d => d.pinned).length
+    readonly property bool hasPinnedItems: pinnedCount > 0
 
     readonly property int visibilityMode: Config.dock.visibility
     readonly property bool magnificationMode: Config.dock.hoverEffect === DockHoverEffect.Magnification
     readonly property real previewGap: Tokens.padding.small
+    readonly property real maxDockWidth: Math.max(160, (parent?.width ?? screen?.width ?? 1920) - Tokens.padding.extraLarge * 4)
+    readonly property real contentFullWidth: iconsRow.implicitWidth + Tokens.padding.large * 2
+    readonly property bool overflowing: contentFullWidth > maxDockWidth
+    readonly property real topHeadroom: Math.round(Config.dock.iconSize * 0.65) + 12
 
     readonly property bool launcherBlocking: (screenState?.launcher ?? false) && Config.launcher.edge === PanelEdge.Bottom
     readonly property bool sessionBlocking: (screenState?.session ?? false) && Config.session.enabled
@@ -35,19 +40,20 @@ Item {
 
     readonly property bool dockOccluded: {
         void DockService.revision;
+        void Hypr.layoutRevision;
         if (visibilityMode !== DockVisibility.DodgeWindows || !enabledOnScreen || !monitor)
             return false;
 
         const monIpc = monitor.lastIpcObject;
-        if (!monIpc || !monIpc.width || !monIpc.height)
+        const hasMonDims = !!(monIpc && monIpc.width && monIpc.height);
+        const scale = hasMonDims && monIpc.scale > 0 ? monIpc.scale : 1;
+        const rotated = hasMonDims && (monIpc.transform ?? 0) % 2 === 1;
+        const monW = hasMonDims ? (rotated ? monIpc.height : monIpc.width) / scale : (screen?.width ?? 0);
+        const monH = hasMonDims ? (rotated ? monIpc.width : monIpc.height) / scale : (screen?.height ?? 0);
+        if (monW <= 0 || monH <= 0)
             return false;
-
-        const scale = monIpc.scale > 0 ? monIpc.scale : 1;
-        const rotated = (monIpc.transform ?? 0) % 2 === 1;
-        const monW = (rotated ? monIpc.height : monIpc.width) / scale;
-        const monH = (rotated ? monIpc.width : monIpc.height) / scale;
-        const monX = monIpc.x ?? 0;
-        const monY = monIpc.y ?? 0;
+        const monX = monIpc?.x ?? 0;
+        const monY = monIpc?.y ?? 0;
 
         const pillW = Math.max(120, root.width);
         const pillH = Math.max(48, root.height);
@@ -56,16 +62,21 @@ Item {
         const dockTop = monY + monH - bar.insetBottom - pillH;
         const dockBottom = monY + monH;
 
-        const specialName = String(monIpc.specialWorkspace?.name || "");
-        const ws = specialName ? Hypr.workspaces.values.find(w => w.name === specialName) : monitor.activeWorkspace;
+        const specialName = String(monIpc?.specialWorkspace?.name || "");
+        const fallbackWsId = monIpc?.activeWorkspace?.id ?? 0;
+        const ws = specialName ? Hypr.workspaces.values.find(w => w.name === specialName) : (monitor.activeWorkspace ?? (fallbackWsId > 0 ? Hypr.workspaces.values.find(w => w.id === fallbackWsId) : Hypr.focusedWorkspace));
         if (!ws)
             return false;
 
         for (const t of ws.toplevels.values) {
             const ipc = t?.lastIpcObject;
-            if (!ipc || !ipc.mapped || !ipc.size || !ipc.at)
+            if (!ipc || !ipc.mapped)
                 continue;
             if (DockService.isMinimized(t))
+                continue;
+            if ((ipc.fullscreen ?? 0) > 0)
+                return true;
+            if (!ipc.size || !ipc.at)
                 continue;
 
             const wx1 = ipc.at[0];
@@ -90,12 +101,13 @@ Item {
             return null;
         return dockItems.find(d => d.key === menuKey) ?? null;
     }
-    readonly property bool menuOpen: enabledOnScreen && dockShown && menuTargetItem !== null
-    readonly property bool previewOpen: enabledOnScreen && dockShown && previewTargetItem !== null && !menuOpen
+    readonly property bool dragActive: dragKey !== "" && dragSourceIndex >= 0
+    readonly property bool menuOpen: enabledOnScreen && dockShown && menuTargetItem !== null && !dragActive
+    readonly property bool previewOpen: enabledOnScreen && dockShown && previewTargetItem !== null && !menuOpen && !dragActive
     readonly property bool pinnedPreviewOpen: pinnedPreviewKey !== ""
     readonly property alias previewItem: preview
     readonly property alias menuItem: contextMenu
-    readonly property bool anyInteractionActive: dockHover.hovered || edgeHovered || preview.pointerInside || pinnedPreviewOpen || menuOpen
+    readonly property bool anyInteractionActive: dockHover.hovered || edgeHovered || preview.pointerInside || pinnedPreviewOpen || menuOpen || dragActive
 
     readonly property bool dockShown: {
         if (!enabledOnScreen)
@@ -120,6 +132,69 @@ Item {
     property real rowPointerX: -1
     property bool rowPointerActive: false
 
+    property string dragKey: ""
+    property string dragAppId: ""
+    property int dragSourceIndex: -1
+    property int dragTargetIndex: -1
+    property real dragStartX: 0
+    property real dragOffsetX: 0
+    property real dragSlotStep: 0
+
+    property string launchPulseKey: ""
+    property int launchPulseSeq: 0
+
+    function anchorXForItem(itemRef: var): real {
+        return dockFlickable.x + iconsRow.x + itemRef.slotCenterInRow - dockFlickable.contentX;
+    }
+
+    function triggerLaunchPulse(key: string): void {
+        if (!key)
+            return;
+        launchPulseKey = key;
+        launchPulseSeq++;
+    }
+
+    function beginDrag(itemRef: var, startX: real, currentX: real): void {
+        closeAllPopups();
+        dragKey = itemRef.modelData?.key ?? "";
+        dragAppId = itemRef.modelData?.appId ?? "";
+        dragSourceIndex = itemRef.index;
+        dragTargetIndex = itemRef.index;
+        dragStartX = startX;
+        dragSlotStep = itemRef.baseSlotWidth + iconsRow.spacing;
+        updateDrag(currentX);
+    }
+
+    function updateDrag(currentX: real): void {
+        if (!dragActive)
+            return;
+        const step = Math.max(1, dragSlotStep);
+        const minOffset = -dragSourceIndex * step;
+        const maxOffset = Math.max(0, (pinnedCount - 1 - dragSourceIndex) * step);
+        dragOffsetX = Math.max(minOffset, Math.min(maxOffset, currentX - dragStartX));
+        dragTargetIndex = Math.max(0, Math.min(pinnedCount - 1, Math.round(dragSourceIndex + dragOffsetX / step)));
+    }
+
+    function endDrag(currentX: real, commit: bool): void {
+        if (!dragActive)
+            return;
+        if (commit)
+            updateDrag(currentX);
+
+        const appId = dragAppId;
+        const fromIdx = dragSourceIndex;
+        const toIdx = dragTargetIndex;
+
+        dragKey = "";
+        dragAppId = "";
+        dragSourceIndex = -1;
+        dragTargetIndex = -1;
+        dragOffsetX = 0;
+
+        if (commit && appId && toIdx >= 0 && toIdx !== fromIdx)
+            DockService.movePinnedToIndex(appId, toIdx);
+    }
+
     function pokeEdge(): void {
         if (!enabledOnScreen)
             return;
@@ -136,12 +211,25 @@ Item {
         hoverCloseTimer.stop();
     }
 
+    visible: offsetScale < 1
+    x: (parent.width - width) / 2
+    y: parent.height - height + (height + 5) * offsetScale
+    implicitWidth: Math.min(maxDockWidth, contentFullWidth)
+    implicitHeight: iconsRow.implicitHeight + Tokens.padding.small + Tokens.padding.extraSmall
+    opacity: 1 - offsetScale
+
     onEnabledOnScreenChanged: {
         if (!enabledOnScreen) {
             edgeReveal = false;
             edgeHovered = false;
+            endDrag(0, false);
             closeAllPopups();
         }
+    }
+
+    onOverflowingChanged: {
+        if (!overflowing)
+            dockFlickable.contentX = 0;
     }
 
     onPinnedPreviewKeyChanged: {
@@ -156,6 +244,12 @@ Item {
             hoveredKey = "";
         if (menuKey && !dockItems.some(d => d.key === menuKey))
             menuKey = "";
+        if (dragActive && !dockItems.some(d => d.key === dragKey && d.pinned))
+            endDrag(0, false);
+
+        const maxX = Math.max(0, dockFlickable.contentWidth - dockFlickable.width);
+        if (dockFlickable.contentX > maxX)
+            dockFlickable.contentX = maxX;
     }
 
     onAnyInteractionActiveChanged: {
@@ -164,13 +258,6 @@ Item {
         else if (edgeReveal)
             autoHideTimer.restart();
     }
-
-    visible: offsetScale < 1
-    x: (parent.width - width) / 2
-    y: parent.height - height + (height + 5) * offsetScale
-    implicitWidth: iconsRow.implicitWidth + Tokens.padding.large * 2
-    implicitHeight: iconsRow.implicitHeight + Tokens.padding.small + Tokens.padding.extraSmall
-    opacity: 1 - offsetScale
 
     Behavior on offsetScale {
         Anim {}
@@ -193,7 +280,7 @@ Item {
         interval: Math.max(40, Config.dock.previewDelay)
         repeat: false
         onTriggered: {
-            if (root.pendingHoverKey && !root.pinnedPreviewKey && !root.menuKey) {
+            if (root.pendingHoverKey && !root.pinnedPreviewKey && !root.menuKey && !root.dragActive) {
                 root.hoveredKey = root.pendingHoverKey;
                 root.previewAnchorX = root.pendingPreviewAnchorX;
             }
@@ -228,102 +315,193 @@ Item {
         }
     }
 
-    Row {
-        id: iconsRow
+    Flickable {
+        id: dockFlickable
 
-        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.left: parent.left
+        anchors.right: parent.right
         anchors.top: parent.top
-        anchors.topMargin: Tokens.padding.small
-        spacing: Tokens.spacing.extraSmall
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: Tokens.padding.large
+        anchors.rightMargin: Tokens.padding.large
+        anchors.topMargin: -root.topHeadroom
 
-        HoverHandler {
-            id: rowHoverTracker
+        contentWidth: iconsRow.implicitWidth
+        contentHeight: height
+        clip: root.overflowing
+        interactive: root.overflowing && !root.dragActive && !root.previewOpen && !root.menuOpen
+        boundsBehavior: Flickable.StopAtBounds
+        flickableDirection: Flickable.HorizontalFlick
 
-            onPointChanged: {
-                if (hovered) {
-                    root.rowPointerX = point.position.x;
-                    root.rowPointerActive = true;
-                }
-            }
-            onHoveredChanged: {
-                if (hovered) {
-                    root.rowPointerX = point.position.x;
-                    root.rowPointerActive = true;
-                } else {
-                    root.rowPointerActive = false;
-                    root.rowPointerX = -1;
-                }
+        WheelHandler {
+            enabled: root.overflowing && !root.previewOpen && !root.menuOpen
+            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            onWheel: event => {
+                const rawDelta = Math.abs(event.angleDelta.x) > Math.abs(event.angleDelta.y) ? event.angleDelta.x : event.angleDelta.y;
+                if (rawDelta === 0)
+                    return;
+                const maxX = Math.max(0, dockFlickable.contentWidth - dockFlickable.width);
+                dockFlickable.contentX = Math.max(0, Math.min(maxX, dockFlickable.contentX - rawDelta * 0.5));
+                event.accepted = true;
             }
         }
 
-        Repeater {
-            id: iconsRepeater
+        Row {
+            id: iconsRow
 
-            model: ScriptModel {
-                values: root.dockItems
-                objectProp: "key"
+            x: Math.max(0, (dockFlickable.width - implicitWidth) / 2)
+            y: root.topHeadroom + Tokens.padding.small
+            spacing: Tokens.spacing.extraSmall
+
+            HoverHandler {
+                id: rowHoverTracker
+
+                onPointChanged: {
+                    if (hovered) {
+                        root.rowPointerX = point.position.x;
+                        root.rowPointerActive = true;
+                    }
+                }
+                onHoveredChanged: {
+                    if (hovered) {
+                        root.rowPointerX = point.position.x;
+                        root.rowPointerActive = true;
+                    } else {
+                        root.rowPointerActive = false;
+                        root.rowPointerX = -1;
+                    }
+                }
             }
 
-            delegate: DockItem {
-                id: dockIcon
+            Repeater {
+                id: iconsRepeater
 
-                readonly property bool firstUnpinned: dockIcon.index > 0 && root.hasPinnedItems && !(dockIcon.modelData?.pinned ?? false) && (root.dockItems[dockIcon.index - 1]?.pinned ?? false)
-
-                iconSize: Config.dock.iconSize
-                magnificationMode: root.magnificationMode
-                pointerX: root.rowPointerX
-                pointerActive: root.rowPointerActive
-                showDividerBefore: firstUnpinned
-                isPreviewTarget: (root.previewOpen && root.previewTargetItem?.key === dockIcon.modelData?.key) || (root.menuOpen && root.menuTargetItem?.key === dockIcon.modelData?.key)
-
-                onHoverEntered: (itemRef, appData) => {
-                    hoverCloseTimer.stop();
-                    if (root.menuKey !== "" || root.pinnedPreviewKey !== "")
-                        return;
-
-                    const centerX = iconsRow.x + itemRef.slotCenterInRow;
-                    root.pendingHoverKey = appData.key;
-                    root.pendingPreviewAnchorX = centerX;
-
-                    if (root.hoveredKey !== "") {
-                        root.hoveredKey = appData.key;
-                        root.previewAnchorX = centerX;
-                    } else {
-                        hoverPreviewTimer.restart();
-                    }
+                model: ScriptModel {
+                    values: root.dockItems
+                    objectProp: "key"
                 }
 
-                onHoverExited: itemRef => {
-                    if (root.pendingHoverKey === itemRef.modelData?.key) {
-                        root.pendingHoverKey = "";
-                        hoverPreviewTimer.stop();
-                    }
-                    hoverCloseTimer.restart();
-                }
+                delegate: DockItem {
+                    id: dockIcon
 
-                onMultiWindowClicked: (itemRef, appData) => {
-                    root.menuKey = "";
-                    if (root.pinnedPreviewKey === appData.key) {
-                        root.pinnedPreviewKey = "";
-                        return;
-                    }
-                    const centerX = iconsRow.x + itemRef.slotCenterInRow;
-                    root.hoveredKey = "";
-                    root.previewAnchorX = centerX;
-                    root.pinnedPreviewKey = appData.key;
-                }
+                    readonly property bool firstUnpinned: dockIcon.index > 0 && root.hasPinnedItems && !(dockIcon.modelData?.pinned ?? false) && (root.dockItems[dockIcon.index - 1]?.pinned ?? false)
+                    readonly property bool isThisDragged: root.dragActive && root.dragKey === (dockIcon.modelData?.key ?? "")
 
-                onContextMenuRequested: (itemRef, appData) => {
-                    hoverPreviewTimer.stop();
-                    root.hoveredKey = "";
-                    root.pinnedPreviewKey = "";
-                    if (root.menuKey === appData.key) {
+                    iconSize: Config.dock.iconSize
+                    magnificationMode: root.magnificationMode
+                    pointerX: root.rowPointerX
+                    pointerActive: root.rowPointerActive && !root.dragActive
+                    showDividerBefore: firstUnpinned
+                    isPreviewTarget: (root.previewOpen && root.previewTargetItem?.key === dockIcon.modelData?.key) || (root.menuOpen && root.menuTargetItem?.key === dockIcon.modelData?.key)
+                    canDragReorder: dockIcon.isPinned && root.pinnedCount > 1
+                    isDragged: isThisDragged
+                    dragOffsetX: isThisDragged ? root.dragOffsetX : 0
+                    dragShiftX: {
+                        if (!root.dragActive || !dockIcon.isPinned || dockIcon.index === root.dragSourceIndex)
+                            return 0;
+                        if (root.dragSourceIndex < root.dragTargetIndex && dockIcon.index > root.dragSourceIndex && dockIcon.index <= root.dragTargetIndex)
+                            return -root.dragSlotStep;
+                        if (root.dragSourceIndex > root.dragTargetIndex && dockIcon.index >= root.dragTargetIndex && dockIcon.index < root.dragSourceIndex)
+                            return root.dragSlotStep;
+                        return 0;
+                    }
+                    externalLaunchSeq: root.launchPulseKey === (dockIcon.modelData?.key ?? "") ? root.launchPulseSeq : 0
+
+                    onPointerMoved: rowX => {
+                        if (!root.dragActive) {
+                            root.rowPointerX = rowX;
+                            root.rowPointerActive = true;
+                        }
+                    }
+
+                    onHoverEntered: (itemRef, appData) => {
+                        hoverCloseTimer.stop();
+                        if (root.menuKey !== "" || root.pinnedPreviewKey !== "" || root.dragActive)
+                            return;
+
+                        const centerX = root.anchorXForItem(itemRef);
+                        root.pendingHoverKey = appData.key;
+                        root.pendingPreviewAnchorX = centerX;
+
+                        if (root.hoveredKey !== "") {
+                            root.hoveredKey = appData.key;
+                            root.previewAnchorX = centerX;
+                        } else {
+                            hoverPreviewTimer.restart();
+                        }
+                    }
+
+                    onHoverExited: itemRef => {
+                        if (root.pendingHoverKey === itemRef.modelData?.key) {
+                            root.pendingHoverKey = "";
+                            hoverPreviewTimer.stop();
+                        }
+                        hoverCloseTimer.restart();
+                    }
+
+                    onMultiWindowClicked: (itemRef, appData) => {
                         root.menuKey = "";
-                        return;
+                        if (root.pinnedPreviewKey === appData.key) {
+                            root.pinnedPreviewKey = "";
+                            return;
+                        }
+                        const centerX = root.anchorXForItem(itemRef);
+                        root.hoveredKey = "";
+                        root.previewAnchorX = centerX;
+                        root.pinnedPreviewKey = appData.key;
                     }
-                    root.menuAnchorX = iconsRow.x + itemRef.slotCenterInRow;
-                    root.menuKey = appData.key;
+
+                    onContextMenuRequested: (itemRef, appData) => {
+                        hoverPreviewTimer.stop();
+                        root.hoveredKey = "";
+                        root.pinnedPreviewKey = "";
+                        if (root.menuKey === appData.key) {
+                            root.menuKey = "";
+                            return;
+                        }
+                        root.menuAnchorX = root.anchorXForItem(itemRef);
+                        root.menuKey = appData.key;
+                    }
+
+                    onMiddleClickLaunched: root.closeAllPopups()
+                    onDragStarted: (itemRef, startX, currentX) => root.beginDrag(itemRef, startX, currentX)
+                    onDragMoved: (itemRef, currentX) => root.updateDrag(currentX)
+                    onDragFinished: (itemRef, currentX) => root.endDrag(currentX, true)
+                    onDragCanceled: root.endDrag(0, false)
                 }
+            }
+        }
+    }
+
+    // Subtle scroll arrows at left/right edges when the dock overflows the monitor width
+    MaterialIcon {
+        anchors.left: parent.left
+        anchors.leftMargin: 4
+        anchors.verticalCenter: parent.verticalCenter
+        text: "chevron_left"
+        color: Colours.palette.m3onSurfaceVariant
+        opacity: root.overflowing && dockFlickable.contentX > 2 ? 0.85 : 0
+        visible: opacity > 0.01
+
+        Behavior on opacity {
+            Anim {
+                type: Anim.FastEffects
+            }
+        }
+    }
+
+    MaterialIcon {
+        anchors.right: parent.right
+        anchors.rightMargin: 4
+        anchors.verticalCenter: parent.verticalCenter
+        text: "chevron_right"
+        color: Colours.palette.m3onSurfaceVariant
+        opacity: root.overflowing && dockFlickable.contentX < dockFlickable.contentWidth - dockFlickable.width - 2 ? 0.85 : 0
+        visible: opacity > 0.01
+
+        Behavior on opacity {
+            Anim {
+                type: Anim.FastEffects
             }
         }
     }
@@ -372,6 +550,7 @@ Item {
                 return;
 
             if (actionId === "launch" && appData.entry) {
+                root.triggerLaunchPulse(appData.key);
                 DockService.launchEntry(appData.entry);
             } else if (actionId === "minimize") {
                 const wins = appData.windows ?? [];
@@ -388,6 +567,13 @@ Item {
                 for (const w of appData.windows ?? [])
                     DockService.closeWindow(w);
             }
+        }
+
+        onDesktopActionTriggered: (desktopAction, appData) => {
+            if (!appData || !desktopAction)
+                return;
+            root.triggerLaunchPulse(appData.key);
+            DockService.launchAction(desktopAction, appData.entry);
         }
 
         onCloseRequested: root.closeAllPopups()

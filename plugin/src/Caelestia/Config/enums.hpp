@@ -48,6 +48,7 @@ ENUM(PerfGraphColours, Scheme, Vibrant, Monochrome, Custom)
 ENUM(VideoHwDecoder, Auto, None, Vaapi, Vdpau, Cuda, Vulkan, Drm)
 ENUM(DockVisibility, AlwaysShow, Floating, AutoHide, DodgeWindows)
 ENUM(DockHoverEffect, Magnification, Highlight)
+ENUM(DockActiveClickAction, Minimize, DoNothing)
 ENUM(WallpaperTransition,
     // clang-format off
     ChromaticBloom,

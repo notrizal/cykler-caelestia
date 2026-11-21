@@ -51,6 +51,19 @@ PageBase {
         }
     ]
 
+    readonly property list<MenuItem> activeClickActionItems: [
+        MenuItem {
+            text: Tr.tr("Minimize")
+            icon: "minimize"
+            value: DockActiveClickAction.Minimize
+        },
+        MenuItem {
+            text: Tr.tr("Do nothing")
+            icon: "block"
+            value: DockActiveClickAction.DoNothing
+        }
+    ]
+
     readonly property var filteredApps: {
         const q = appSearch.text.trim().toLowerCase();
         const pinned = GlobalConfig.dock.pinnedApps;
@@ -131,6 +144,15 @@ PageBase {
             menuItems: root.hoverEffectItems
             active: root.hoverEffectItems.find(i => i.value === Config.dock.hoverEffect) ?? root.hoverEffectItems[0]
             onSelected: item => GlobalConfig.dock.hoverEffect = item.value
+        }
+
+        SelectRow {
+            // SEARCH: dock click active focused window minimize hide do nothing
+            label: Tr.tr("Click active app")
+            subtext: Tr.tr("Choose whether clicking the currently focused app minimizes it or does nothing")
+            menuItems: root.activeClickActionItems
+            active: root.activeClickActionItems.find(i => i.value === Config.dock.activeClickAction) ?? root.activeClickActionItems[0]
+            onSelected: item => GlobalConfig.dock.activeClickAction = item.value
         }
 
         ToggleRow {

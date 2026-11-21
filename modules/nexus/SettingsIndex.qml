@@ -684,6 +684,15 @@ QtObject {
             page: "panels",
             path: [3],
             title: Tr.tr("Launcher"),
+            section: Tr.tr("Behaviour"),
+            label: Tr.tr("Clipboard auto-paste"),
+            subtext: Tr.tr("Automatically paste the selected clipboard item into the active window"),
+            keywords: "clipboard history paste auto cliphist"
+        },
+        {
+            page: "panels",
+            path: [3],
+            title: Tr.tr("Launcher"),
             section: Tr.tr("Fuzzy search"),
             label: Tr.tr("Apps")
         },
@@ -1639,6 +1648,15 @@ QtObject {
             label: Tr.tr("Hover effect"),
             subtext: Tr.tr("Visual style when moving the pointer over dock icons"),
             keywords: "dock hover effect magnification highlight zoom scale"
+        },
+        {
+            page: "panels",
+            path: [24],
+            title: Tr.tr("Dock"),
+            section: Tr.tr("General"),
+            label: Tr.tr("Click active app"),
+            subtext: Tr.tr("Choose whether clicking the currently focused app minimizes it or does nothing"),
+            keywords: "dock click active focused window minimize hide do nothing"
         },
         {
             page: "panels",

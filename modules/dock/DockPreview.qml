@@ -22,7 +22,8 @@ Item {
     required property bool open
     required property bool pinnedMode
 
-    readonly property var windows: targetItem?.windows ?? []
+    readonly property var activeItem: targetItem ?? displayedItem
+    readonly property var windows: activeItem?.windows ?? []
     readonly property bool hasWindows: windows.length > 0
     readonly property bool pointerInside: popupHover.hovered || hoveredCardCount > 0
     readonly property real screenMargin: Tokens.padding.medium
@@ -30,17 +31,42 @@ Item {
     readonly property real panelsWidth: parent?.parent?.width ?? screen.width
     readonly property real dockX: parent?.x ?? 0
     property int hoveredCardCount: 0
+    property var displayedItem: null
+    property bool allowXAnim: false
 
     signal windowActivated(var client)
     signal windowClosed(var client)
     signal closeRequested
 
-    visible: opacity > 0
+    visible: opacity > 0 && activeItem !== null
     opacity: open && targetItem !== null ? 1 : 0
     implicitWidth: Math.min(panelsWidth - screenMargin * 2, contentLoader.implicitWidth)
     implicitHeight: contentLoader.implicitHeight
 
     x: Math.max(-dockX + screenMargin, Math.min(panelsWidth - dockX - width - screenMargin, anchorCenterX - width / 2))
+
+    onTargetItemChanged: {
+        if (targetItem)
+            displayedItem = targetItem;
+    }
+
+    onOpenChanged: {
+        if (open) {
+            if (targetItem)
+                displayedItem = targetItem;
+            xAnimTimer.restart();
+        } else {
+            xAnimTimer.stop();
+            allowXAnim = false;
+        }
+    }
+
+    onVisibleChanged: {
+        if (!visible && !open) {
+            displayedItem = null;
+            allowXAnim = false;
+        }
+    }
 
     transform: Translate {
         y: root.open ? 0 : 8
@@ -59,8 +85,21 @@ Item {
     }
 
     Behavior on x {
+        enabled: root.allowXAnim
+
         Anim {
             type: Anim.DefaultSpatial
+        }
+    }
+
+    Timer {
+        id: xAnimTimer
+
+        interval: 40
+        repeat: false
+        onTriggered: {
+            if (root.open)
+                root.allowXAnim = true;
         }
     }
 
@@ -110,7 +149,7 @@ Item {
                 id: tooltipText
 
                 anchors.centerIn: parent
-                text: root.targetItem?.name ?? ""
+                text: root.activeItem?.name ?? ""
                 color: Colours.palette.m3onSurface
                 font: Tokens.font.label.medium
             }
@@ -210,12 +249,12 @@ Item {
                                         asynchronous: true
                                         Layout.alignment: Qt.AlignVCenter
                                         implicitSize: 16
-                                        source: root.targetItem?.icon ?? ""
+                                        source: root.activeItem?.icon ?? ""
                                     }
 
                                     StyledText {
                                         Layout.fillWidth: true
-                                        text: card.modelData?.title || root.targetItem?.name || ""
+                                        text: card.modelData?.title || root.activeItem?.name || ""
                                         color: Colours.palette.m3onSurface
                                         font: Tokens.font.label.medium
                                         elide: Text.ElideRight
@@ -278,7 +317,7 @@ Item {
                                         id: screencopy
 
                                         anchors.fill: parent
-                                        captureSource: root.open && !card.minimized ? (card.modelData?.wayland ?? null) : null
+                                        captureSource: root.visible && !card.minimized ? (card.modelData?.wayland ?? null) : null
                                         live: root.open && !card.minimized && card.modelData !== null
                                         constraintSize: Qt.size(frame.width, frame.height)
                                     }
@@ -293,7 +332,7 @@ Item {
                                             asynchronous: true
                                             implicitSize: 32
                                             opacity: card.minimized ? 0.65 : 0.9
-                                            source: root.targetItem?.icon ?? ""
+                                            source: root.activeItem?.icon ?? ""
                                         }
 
                                         StyledText {
